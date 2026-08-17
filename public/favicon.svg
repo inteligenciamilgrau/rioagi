@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!--
+    Favicon: silhueta do casario em ladeira + mira.
+    Sem gradiente e sem detalhe fino de proposito — a 16 px so sobrevive
+    massa cheia e contraste alto.
+  -->
+  <rect width="64" height="64" rx="10" fill="#0e1013"/>
+
+  <!-- céu do entardecer, só uma barra quente atrás do morro -->
+  <rect x="6" y="22" width="52" height="14" fill="#c4571b" opacity=".55"/>
+
+  <!-- casario empilhado subindo para a direita -->
+  <path fill="#e9e5db" d="
+    M6 46 V40 h5 v-4 h5 v-6 h5 v4 h4 v-8 h6 v5 h4 v-9 h6 v6 h5 v-3 h4 v10 h4 v-6 h4 v17 z"/>
+
+  <!-- caixas d'água -->
+  <rect x="27" y="19" width="4" height="3" fill="#2f6ea8"/>
+  <rect x="44" y="16" width="4" height="3" fill="#2f6ea8"/>
+
+  <!-- fiação cruzando -->
+  <path d="M4 27 L60 21" stroke="#0e1013" stroke-width="1.6" fill="none" opacity=".9"/>
+
+  <!-- mira -->
+  <g stroke="#c4571b" stroke-width="3.4" stroke-linecap="butt">
+    <path d="M32 6 V14"/>
+    <path d="M32 50 V58"/>
+    <path d="M6 32 H14"/>
+    <path d="M50 32 H58"/>
+  </g>
+  <circle cx="32" cy="32" r="2.2" fill="#c4571b"/>
+</svg>

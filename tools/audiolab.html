@@ -1,0 +1,12 @@
+<!doctype html>
+<!-- Bancada isolada de audio: sem jogo, sem render 3D, so o grafo.
+     Serve para medir o CUSTO DE DSP do caminho de voz sem contencao. -->
+<html lang="pt-BR"><head><meta charset="utf-8"><title>audiolab</title></head>
+<body style="background:#111;color:#ddd;font:14px monospace">
+<pre id="log">bancada de audio pronta</pre>
+<script type="module">
+  import * as THREE from 'three';
+  window.THREE = THREE;
+  window.__lab = true;
+</script>
+</body></html>

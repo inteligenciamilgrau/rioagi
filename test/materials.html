@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MAT — Banco de provas de materiais</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0b0c0e; overflow: hidden;
+    font: 12px/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; color: #ddd6c8; }
+  canvas { display: block; }
+  #rotulos { position: fixed; inset: 0; pointer-events: none; }
+  .rot { position: absolute; transform: translate(-50%, 0); white-space: nowrap;
+    background: rgba(8,9,11,.72); border: 1px solid rgba(255,255,255,.10);
+    padding: 2px 6px; border-radius: 3px; font-size: 11px; letter-spacing: .02em;
+    text-shadow: 0 1px 2px #000; }
+  .rot b { color: #f0b27a; font-weight: 600; }
+  .rot i { color: #7d8a96; font-style: normal; }
+  #hud { position: fixed; left: 10px; top: 10px; background: rgba(8,9,11,.85);
+    border: 1px solid rgba(255,255,255,.12); padding: 8px 10px; border-radius: 4px;
+    max-width: 46ch; white-space: pre-wrap; }
+  #hud h1 { font-size: 12px; margin: 0 0 6px; color: #f0b27a; letter-spacing: .06em; }
+  #hud .ok { color: #86c98a; } #hud .warn { color: #e0b64a; } #hud .bad { color: #e0705a; }
+  #ajuda { position: fixed; right: 10px; top: 10px; background: rgba(8,9,11,.85);
+    border: 1px solid rgba(255,255,255,.12); padding: 8px 10px; border-radius: 4px;
+    opacity: .75; }
+  #mapas { position: fixed; inset: 0; overflow: auto; background: #0b0c0e;
+    display: none; padding: 12px; }
+  #mapas.on { display: block; }
+  #mapas .linha { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  #mapas .nome { width: 20ch; color: #f0b27a; }
+  #mapas canvas { image-rendering: pixelated; border: 1px solid #2a2d33; }
+  #mapas .leg { color: #7d8a96; width: 8ch; text-align: center; }
+</style>
+</head>
+<body>
+<div id="rotulos"></div>
+<div id="hud"><h1>MAT — BANCO DE PROVAS</h1><span id="status">gerando…</span></div>
+<div id="ajuda">
+1..4 preset (baixo/medio/alto/ultra)<br>
+M mapas · G grade · F foco · setas troca<br>
+mouse arrasta · roda zoom
+</div>
+<div id="mapas"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { MaterialLibrary } from '/src/world/materials/MaterialLibrary.js';
+import { EventBus } from '/src/core/EventBus.js';
+import { Settings } from '/src/core/Settings.js';
+
+const params = new URLSearchParams(location.search);
+const PRESET = params.get('preset') || 'alto';
+const MODO = params.get('modo') || 'grade';      // grade | foco | mapas
+const FOCO = params.get('foco') || 'tijolo';
+
+// --- renderer (o banco de provas é uma ferramenta, não um módulo do jogo) ---
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x121418);
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 200);
+
+// --- IBL: sem ambiente não dá para julgar roughness nem metalness ---
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
+scene.environment = envRT.texture;
+
+// --- luz de entardecer, igual ao norte visual do projeto ---
+const sol = new THREE.DirectionalLight(0xffd2a1, 3.1);
+sol.position.set(-6, 4.2, 5.5);
+sol.castShadow = true;
+sol.shadow.mapSize.set(2048, 2048);
+sol.shadow.camera.near = 0.5; sol.shadow.camera.far = 60;
+sol.shadow.camera.left = -14; sol.shadow.camera.right = 14;
+sol.shadow.camera.top = 14; sol.shadow.camera.bottom = -14;
+sol.shadow.bias = -0.0009;
+scene.add(sol);
+scene.add(new THREE.HemisphereLight(0x9fc0e8, 0x2a2117, 0.55));
+const preenche = new THREE.DirectionalLight(0x86a8d8, 0.5);
+preenche.position.set(7, 2, -4);
+scene.add(preenche);
+
+// --- contexto mínimo para a MaterialLibrary ---
+const bus = new EventBus();
+const settings = new Settings(bus);
+settings.quality = PRESET;
+// `?so=tijolo,concreto` gera só essas superfícies — iteração rápida ao ajustar uma.
+const SO = (params.get('so') || '').split(',').map((s) => s.trim()).filter(Boolean);
+const ctx = { renderer, bus, settings, scene, camera, matFiltro: SO };
+
+const statusEl = document.getElementById('status');
+const rotEl = document.getElementById('rotulos');
+const mapasEl = document.getElementById('mapas');
+
+let lib = null;
+let grupo = new THREE.Group();
+scene.add(grupo);
+const rotulos = [];
+let focoIdx = 0;
+
+// Geometrias compartilhadas
+const geoEsfera = new THREE.SphereGeometry(0.42, 96, 64);
+const geoPlaca = new THREE.BoxGeometry(1.0, 1.0, 0.06);
+const geoChao = new THREE.PlaneGeometry(60, 60);
+
+/** Reescreve as UV de uma geometria para a escala de mundo do material. */
+function escalarUV(geo, escala, largura, altura) {
+  const uv = geo.attributes.uv;
+  const arr = uv.array;
+  for (let i = 0; i < uv.count; i++) {
+    arr[i * 2] = arr[i * 2] * largura * escala[0];
+    arr[i * 2 + 1] = arr[i * 2 + 1] * altura * escala[1];
+  }
+  uv.needsUpdate = true;
+  return geo;
+}
+
+async function construir() {
+  const t0 = performance.now();
+  statusEl.textContent = 'gerando texturas…';
+  await new Promise((r) => requestAnimationFrame(r));
+
+  lib?.dispose();
+  lib = new MaterialLibrary(ctx);
+  await lib.init();
+
+  // limpa cena
+  grupo.traverse((o) => { if (o.geometry && o.geometry !== geoEsfera && o.geometry !== geoChao) o.geometry.dispose(); });
+  scene.remove(grupo);
+  grupo = new THREE.Group();
+  scene.add(grupo);
+  rotEl.innerHTML = '';
+  rotulos.length = 0;
+
+  const nomes = lib.nomes();
+  if (MODO === 'foco') montarFoco(nomes);
+  else montarGrade(nomes);
+
+  const s = lib.stats;
+  const lentos = Object.entries(s.porSuperficie).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const cls = s.totalMs < 8000 ? 'ok' : s.totalMs < 14000 ? 'warn' : 'bad';
+  statusEl.innerHTML =
+    `preset <b>${PRESET}</b> · base ${settings.q.textureSize}px\n` +
+    `<span class="${cls}">geração: ${s.totalMs} ms</span> · ${nomes.length} superfícies\n` +
+    `${s.texturas} texturas · ~${(s.bytesGpu / 1048576).toFixed(0)} MB VRAM\n` +
+    `mais caras: ${lentos.map(([n, v]) => `${n} ${v}ms`).join(', ')}\n` +
+    `total da página: ${Math.round(performance.now() - t0)} ms`;
+
+  window.__mat = {
+    pronto: true, stats: s, nomes,
+    preset: PRESET, modo: MODO,
+    ms: s.totalMs,
+  };
+  montarMapas(nomes);
+}
+
+/** Grade: uma esfera + uma placa inclinada por material, com rótulo. */
+function montarGrade(nomes) {
+  const COLS = 7;
+  const PX = 1.65, PZ = 1.75;
+  const chao = new THREE.Mesh(geoChao, new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 0.95 }));
+  chao.rotation.x = -Math.PI / 2;
+  chao.position.y = -0.75;
+  chao.receiveShadow = true;
+  grupo.add(chao);
+
+  nomes.forEach((nome, i) => {
+    const cx = (i % COLS - (COLS - 1) / 2) * PX;
+    const cz = (Math.floor(i / COLS) - (Math.ceil(nomes.length / COLS) - 1) / 2) * PZ;
+    const mat = lib.get(nome);
+    const esc = mat.userData.escalaUV;
+
+    // Esfera: mostra a resposta especular e o normal em curvatura
+    const esfera = new THREE.Mesh(escalarUV(geoEsfera.clone(), esc, 1.3, 0.7), mat);
+    esfera.position.set(cx - 0.34, 0.10, cz);
+    esfera.castShadow = esfera.receiveShadow = true;
+    grupo.add(esfera);
+
+    // Placa: mostra o tile e o padrão em superfície reta
+    const placa = new THREE.Mesh(escalarUV(geoPlaca.clone(), esc, 1.0, 1.0), mat);
+    placa.position.set(cx + 0.42, 0.10, cz - 0.10);
+    placa.rotation.y = -0.42;
+    placa.castShadow = placa.receiveShadow = true;
+    grupo.add(placa);
+
+    const el = document.createElement('div');
+    el.className = 'rot';
+    el.innerHTML = `<b>${nome}</b> <i>${mat.userData.superficie} · ${mat.userData.resolucao}px · ${mat.userData.metros[0]}m</i>`;
+    rotEl.appendChild(el);
+    rotulos.push({ el, pos: new THREE.Vector3(cx, -0.42, cz + 0.62) });
+  });
+
+  camera.position.set(0, 7.4, 9.2);
+  camera.lookAt(0, -0.2, 0.4);
+}
+
+/** Foco: uma parede grande de um material só, para julgar de perto. */
+function montarFoco(nomes) {
+  focoIdx = Math.max(0, nomes.indexOf(FOCO));
+  const nome = nomes[focoIdx];
+  const mat = lib.get(nome);
+  const esc = mat.userData.escalaUV;
+
+  const parede = new THREE.Mesh(escalarUV(new THREE.PlaneGeometry(6, 3.4, 1, 1), esc, 6, 3.4), mat);
+  parede.receiveShadow = true;
+  grupo.add(parede);
+
+  const bola = new THREE.Mesh(escalarUV(geoEsfera.clone(), esc, 1.3, 0.7), mat);
+  bola.scale.setScalar(1.7);
+  bola.position.set(-1.9, -0.75, 1.05);
+  bola.castShadow = bola.receiveShadow = true;
+  grupo.add(bola);
+
+  const piso = new THREE.Mesh(escalarUV(new THREE.PlaneGeometry(8, 4), esc, 8, 4), mat);
+  piso.rotation.x = -Math.PI / 2;
+  piso.position.set(0, -1.7, 2);
+  piso.receiveShadow = true;
+  grupo.add(piso);
+
+  const el = document.createElement('div');
+  el.className = 'rot';
+  el.innerHTML = `<b>${nome}</b> <i>${mat.userData.superficie} · ${mat.userData.resolucao}px · tile ${mat.userData.metros[0]}×${mat.userData.metros[1]}m</i>`;
+  rotEl.appendChild(el);
+  rotulos.push({ el, pos: new THREE.Vector3(0, 1.9, 0) });
+
+  camera.position.set(0.3, 0.35, 3.5);
+  camera.lookAt(0, 0.1, 0);
+  window.__foco = nome;
+}
+
+/** Painel de mapas crus: albedo / normal / ORM lado a lado. */
+function montarMapas(nomes) {
+  mapasEl.innerHTML = '';
+  for (const nome of nomes) {
+    const mat = lib.get(nome);
+    const linha = document.createElement('div');
+    linha.className = 'linha';
+    linha.innerHTML = `<div class="nome">${nome}</div>`;
+    for (const [rot, tex] of [['albedo', mat.map], ['normal', mat.normalMap], ['ORM', mat.roughnessMap]]) {
+      const wrap = document.createElement('div');
+      const c = document.createElement('canvas');
+      const S = 150;
+      c.width = S; c.height = S;
+      const g = c.getContext('2d');
+      const img = tex.image;
+      const src = new ImageData(new Uint8ClampedArray(img.data.buffer.slice(0)), img.width, img.height);
+      const tmp = document.createElement('canvas');
+      tmp.width = img.width; tmp.height = img.height;
+      tmp.getContext('2d').putImageData(src, 0, 0);
+      g.save(); g.translate(0, S); g.scale(1, -1);   // flipY=false ⇒ desenha invertido
+      g.drawImage(tmp, 0, 0, S, S);
+      g.restore();
+      wrap.appendChild(c);
+      const leg = document.createElement('div');
+      leg.className = 'leg'; leg.textContent = `${rot} ${img.width}`;
+      wrap.appendChild(leg);
+      linha.appendChild(wrap);
+    }
+    mapasEl.appendChild(linha);
+  }
+}
+
+// --- órbita simples (sem dependência externa) ---
+const alvo = new THREE.Vector3(0, 0, 0);
+let orbit = { theta: 0, phi: 0, raio: 0, ativo: false, px: 0, py: 0 };
+function sincronizarOrbita() {
+  const d = camera.position.clone().sub(alvo);
+  orbit.raio = d.length();
+  orbit.theta = Math.atan2(d.x, d.z);
+  orbit.phi = Math.acos(THREE.MathUtils.clamp(d.y / orbit.raio, -1, 1));
+}
+function aplicarOrbita() {
+  const s = Math.sin(orbit.phi);
+  camera.position.set(
+    alvo.x + orbit.raio * s * Math.sin(orbit.theta),
+    alvo.y + orbit.raio * Math.cos(orbit.phi),
+    alvo.z + orbit.raio * s * Math.cos(orbit.theta),
+  );
+  camera.lookAt(alvo);
+}
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  sincronizarOrbita(); orbit.ativo = true; orbit.px = e.clientX; orbit.py = e.clientY;
+});
+addEventListener('pointerup', () => { orbit.ativo = false; });
+addEventListener('pointermove', (e) => {
+  if (!orbit.ativo) return;
+  orbit.theta -= (e.clientX - orbit.px) * 0.006;
+  orbit.phi = THREE.MathUtils.clamp(orbit.phi - (e.clientY - orbit.py) * 0.006, 0.05, Math.PI - 0.05);
+  orbit.px = e.clientX; orbit.py = e.clientY;
+  aplicarOrbita();
+});
+renderer.domElement.addEventListener('wheel', (e) => {
+  sincronizarOrbita();
+  orbit.raio = THREE.MathUtils.clamp(orbit.raio * (1 + Math.sign(e.deltaY) * 0.10), 0.4, 60);
+  aplicarOrbita();
+}, { passive: true });
+
+addEventListener('keydown', (e) => {
+  const presets = { '1': 'baixo', '2': 'medio', '3': 'alto', '4': 'ultra' };
+  if (presets[e.key]) { location.search = `?preset=${presets[e.key]}&modo=${MODO}&foco=${FOCO}`; }
+  if (e.key === 'm' || e.key === 'M') mapasEl.classList.toggle('on');
+  if (e.key === 'g' || e.key === 'G') location.search = `?preset=${PRESET}&modo=grade`;
+  if (e.key === 'f' || e.key === 'F') location.search = `?preset=${PRESET}&modo=foco&foco=${FOCO}`;
+  if (MODO === 'foco' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+    const ns = lib.nomes();
+    const i = (ns.indexOf(FOCO) + (e.key === 'ArrowRight' ? 1 : ns.length - 1)) % ns.length;
+    location.search = `?preset=${PRESET}&modo=foco&foco=${ns[i]}`;
+  }
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+const _v = new THREE.Vector3();
+function loop() {
+  requestAnimationFrame(loop);
+  for (const r of rotulos) {
+    _v.copy(r.pos).project(camera);
+    r.el.style.left = `${(_v.x * 0.5 + 0.5) * innerWidth}px`;
+    r.el.style.top = `${(-_v.y * 0.5 + 0.5) * innerHeight}px`;
+    r.el.style.display = _v.z < 1 ? 'block' : 'none';
+  }
+  renderer.render(scene, camera);
+}
+loop();
+
+if (MODO === 'mapas') mapasEl.classList.add('on');
+construir().catch((err) => {
+  console.error(err);
+  statusEl.innerHTML = `<span class="bad">FALHOU</span>\n${String(err?.stack || err)}`;
+  window.__mat = { pronto: false, erro: String(err?.stack || err) };
+});
+</script>
+</body>
+</html>

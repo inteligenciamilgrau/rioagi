@@ -1,0 +1,75 @@
+# ---------------------------------------------------------------------------
+# Operação RIO-AGI — o que NÃO vai para o repositório.
+#
+# Regra geral: só entra o que é preciso para clonar, `npm install`, `npm run
+# dev` e jogar. Tudo que é gerado, medido ou pesado fica de fora.
+# ---------------------------------------------------------------------------
+
+# --- dependências e build ---------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# --- material pesado que NÃO deve subir -------------------------------------
+# Capturas de tela das ferramentas de diagnóstico. São centenas de MB de
+# evidência de desenvolvimento; úteis na máquina, inúteis no repositório.
+shots/
+
+# Fontes de vídeo do projeto de YouTube. Gigabytes. Nunca deve ir para o git —
+# o GitHub rejeita arquivo acima de 100 MB e a pasta inteira passa de 3 GB.
+video - do not use this folder/
+
+# --- saídas de teste --------------------------------------------------------
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+*.webm
+*.trace.zip
+
+# --- segredos e credenciais -------------------------------------------------
+# Hoje o projeto não tem nenhum, e a intenção é que continue assim. Estas
+# linhas existem para que um arquivo criado por engano não vaze num commit.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.npmrc
+.netrc
+credentials*
+secrets*
+
+# --- lixo de sistema operacional --------------------------------------------
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# --- editores ---------------------------------------------------------------
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+
+# --- logs e temporários -----------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tmp
+*.temp
+.cache/

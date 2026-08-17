@@ -1,0 +1,23 @@
+import { chromium } from 'playwright';
+import { spawn } from 'node:child_process';
+const ROOT=process.cwd(), PORT=5219;
+const v=spawn(process.execPath,[ROOT+'/node_modules/vite/bin/vite.js','--host','127.0.0.1','--port',String(PORT),'--strictPort'],{cwd:ROOT,stdio:['ignore','pipe','pipe']});
+await new Promise((r,j)=>{let o='';const h=d=>{o+=d;if(/ready in/.test(o))r()};v.stdout.on('data',h);v.stderr.on('data',h);setTimeout(()=>j(new Error('t/o')),40000)});
+const b=await chromium.launch({headless:true,args:['--use-angle=default','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--mute-audio']});
+const p=await b.newPage({viewport:{width:1600,height:900}});
+const logs=[]; p.on('console',m=>{const t=m.text(); if(/capa/i.test(t)) logs.push(t.slice(0,90));});
+p.on('pageerror',e=>console.log('PAGEERR:',e.message.split('\n')[0]));
+await p.goto(`http://127.0.0.1:${PORT}/`,{waitUntil:'load',timeout:60000});
+await p.waitForFunction(()=>window.__game?.ready,{timeout:180000});
+await p.waitForTimeout(2500);
+const r=await p.evaluate(()=>{
+  const ctx=window.__game.ctx; ctx.state='menu'; ctx.menu.mostrar('menu');
+  ctx.hud?.setVisible?.(false);
+  const c=document.querySelector('#tela-menu .fundo-capa');
+  return {temCapa:!!c, url:c?getComputedStyle(c).backgroundImage.slice(0,60):null};
+});
+console.log('camada de capa no menu:', r.temCapa, r.url||'');
+if(logs.length) console.log('log:', logs[0]);
+await p.waitForTimeout(600);
+await p.screenshot({path:ROOT+'/shots/menu-capa.png'});
+await b.close(); v.kill();

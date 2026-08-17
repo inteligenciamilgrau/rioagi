@@ -1,0 +1,14 @@
+import { chromium } from 'playwright';
+import { spawn } from 'node:child_process';
+const ROOT = process.cwd();
+const PORT = 5185;
+const vite = spawn(process.execPath, [ROOT+'/node_modules/vite/bin/vite.js','--host','127.0.0.1','--port',String(PORT),'--strictPort'], {cwd:ROOT, stdio:['ignore','pipe','pipe']});
+await new Promise((res,rej)=>{let o='';const h=d=>{o+=d;if(/ready in/.test(o))res()};vite.stdout.on('data',h);vite.stderr.on('data',h);setTimeout(()=>rej(new Error('t/o')),40000)});
+const b = await chromium.launch({headless:true,args:['--use-angle=default','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--mute-audio']});
+const p = await b.newPage({viewport:{width:1600,height:1000}});
+p.on('pageerror',e=>console.log('ERR:',e.message.split('\n')[0]));
+await p.goto(`http://127.0.0.1:${PORT}/test/materials.html`,{waitUntil:'load',timeout:60000});
+await p.waitForTimeout(35000);
+await p.screenshot({path: ROOT+'/shots/materiais.png', fullPage:false});
+console.log('ok');
+await b.close(); vite.kill();

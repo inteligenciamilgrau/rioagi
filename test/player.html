@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PLAYER — banco de testes</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0a0a0c; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #painel {
+    position: fixed; top: 10px; left: 10px; width: 288px;
+    font: 12px/1.55 ui-monospace, "Cascadia Mono", Consolas, monospace;
+    background: rgba(10,11,13,.82); border: 1px solid #2b2f36; border-radius: 4px;
+    color: #d6d2c8; padding: 10px 12px; white-space: pre; pointer-events: none;
+    text-shadow: 0 1px 2px #000;
+  }
+  #painel b { color: #e8a33d; font-weight: 600; }
+  #ajuda {
+    position: fixed; bottom: 10px; left: 10px;
+    font: 11px/1.5 ui-monospace, Consolas, monospace; color: #8b8578;
+    background: rgba(10,11,13,.72); border: 1px solid #24272c; border-radius: 4px;
+    padding: 8px 10px; white-space: pre; pointer-events: none;
+  }
+  #mira {
+    position: fixed; left: 50%; top: 50%; width: 2px; height: 2px;
+    transform: translate(-1px,-1px); pointer-events: none;
+  }
+  #mira i {
+    position: absolute; background: #d8f0c8; opacity: .9;
+    box-shadow: 0 0 2px #000;
+  }
+  #centro { position: fixed; left: 50%; top: 50%; width: 1px; height: 1px;
+    background: #ff3b30; transform: translate(-.5px,-.5px); pointer-events: none; z-index: 5; }
+  #inicio {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    background: rgba(6,7,9,.86); color: #e6e0d4; cursor: pointer;
+    font: 15px/1.7 ui-monospace, Consolas, monospace; text-align: center;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="mira"><i></i><i></i><i></i><i></i></div>
+<div id="centro"></div>
+<div id="painel">carregando…</div>
+<div id="ajuda">WASD mover · SHIFT correr · CTRL agachar (correndo = deslizar) · ESPAÇO pular/mantle
+BOTÃO ESQ atirar · BOTÃO DIR mirar · R recarregar · H inspecionar
+1/2/3 trocar arma · Q anterior · B modo de tiro · ESC solta o mouse</div>
+<div id="inicio">clique para travar o mouse<br><span style="opacity:.6">banco de testes do módulo PLAYER</span></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { EventBus } from '/src/core/EventBus.js';
+import { Settings } from '/src/core/Settings.js';
+import { Input } from '/src/core/Input.js';
+import { Player } from '/src/player/Player.js';
+
+/* =================================================================== *
+ * Contexto mínimo (o Engine real é do CORE; aqui montamos só o preciso)
+ * =================================================================== */
+window.THREE = THREE;   // exposto só para o banco de testes
+const canvas = document.getElementById('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.autoClear = false;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a2028);
+scene.fog = new THREE.Fog(0x1a2028, 40, 190);
+const viewScene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(80, innerWidth / innerHeight, 0.05, 400);
+const viewCamera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.004, 12);
+
+const bus = new EventBus();
+const settings = new Settings(bus);
+settings.fov = 80; settings.viewmodelFov = 60;
+
+/* ---------------- luz do entardecer ---------------- */
+const sun = new THREE.DirectionalLight(0xffd9a8, 4.6);
+sun.position.set(-24, 16, 12);
+scene.add(sun);
+scene.add(new THREE.HemisphereLight(0x8fb0d8, 0x3a2f26, 1.3));
+scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+
+/* =================================================================== *
+ * Mundo de teste: chão + caixas + alvos
+ * =================================================================== */
+const SUP = {
+  concreto: 0x6e6a63, tijolo: 0x8a4a34, madeira: 0x7a5432,
+  metal: 0x5e6469, asfalto: 0x3a3a3c, terra: 0x6b5540,
+};
+const obstaculos = [];   // {box: Box3, surface}
+const solidos = [];      // meshes para raycast
+
+function caixa(x, y, z, w, h, d, surface) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const mat = new THREE.MeshStandardMaterial({ color: SUP[surface] ?? 0x808080, roughness: 0.88, metalness: surface === 'metal' ? 0.75 : 0.04 });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y + h / 2, z);
+  m.userData.surface = surface;
+  scene.add(m); solidos.push(m);
+  const b = new THREE.Box3().setFromCenterAndSize(m.position, new THREE.Vector3(w, h, d));
+  obstaculos.push({ box: b, surface });
+  return m;
+}
+
+// chão
+{
+  const g = new THREE.PlaneGeometry(360, 360, 1, 1);
+  g.rotateX(-Math.PI / 2);
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x4a4741, roughness: 0.95 }));
+  m.userData.surface = 'asfalto';
+  scene.add(m); solidos.push(m);
+}
+// grade de referência discreta
+{ const gh = new THREE.GridHelper(200, 100, 0x2c3138, 0x232830); gh.position.y = 0.005; scene.add(gh); }
+
+// degraus de mantle (0.5 / 0.9 / 1.25 / 1.6 — o último deve FALHAR, > 1,3 m)
+caixa(-6, 0, -8, 3, 0.50, 3, 'concreto');
+caixa(-2, 0, -8, 3, 0.90, 3, 'concreto');
+caixa(2, 0, -8, 3, 1.25, 3, 'concreto');
+caixa(6, 0, -8, 3, 1.60, 3, 'tijolo');
+// paredes de penetração
+caixa(-10, 0, -18, 0.30, 2.6, 4, 'madeira');
+caixa(-4, 0, -18, 0.30, 2.6, 4, 'metal');
+caixa(2, 0, -18, 0.45, 2.6, 4, 'tijolo');
+caixa(8, 0, -18, 0.60, 2.6, 4, 'concreto');
+// corredor / cobertura
+caixa(-16, 0, 4, 1.0, 2.4, 14, 'tijolo');
+caixa(14, 0, 2, 1.0, 2.4, 18, 'tijolo');
+caixa(0, 0, 14, 8, 1.0, 1.0, 'concreto');
+caixa(-9, 0, 9, 2.2, 0.9, 2.2, 'madeira');
+
+/* ---------------- alvos (IA falsa) ---------------- */
+const alvos = [];
+function alvo(x, z, dist) {
+  const g = new THREE.Group();
+  const corpo = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.95, 0.28),
+    new THREE.MeshStandardMaterial({ color: 0x9a5a3a, roughness: 0.8 }));
+  corpo.position.y = 1.05; corpo.userData.part = 'torso';
+  const cabeca = new THREE.Mesh(new THREE.SphereGeometry(0.14, 14, 10),
+    new THREE.MeshStandardMaterial({ color: 0xd8b090, roughness: 0.75 }));
+  cabeca.position.y = 1.68; cabeca.userData.part = 'head';
+  const perna = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.58, 0.24),
+    new THREE.MeshStandardMaterial({ color: 0x3f4a35, roughness: 0.9 }));
+  perna.position.y = 0.30; perna.userData.part = 'leg';
+  g.add(corpo, cabeca, perna);
+  g.position.set(x, 0, z);
+  scene.add(g);
+  const a = { id: alvos.length + 1, group: g, parts: [corpo, cabeca, perna], hp: 100, dist, flash: 0 };
+  alvos.push(a);
+  return a;
+}
+alvo(-3, -26, 26); alvo(0, -36, 36); alvo(4, -56, 56); alvo(-7, -86, 86);
+
+/* =================================================================== *
+ * Colisão — implementa o CONTRATO do WORLD (cápsula vs AABB + raycast)
+ * =================================================================== */
+const _rc = new THREE.Raycaster();
+const _out = { position: new THREE.Vector3(), grounded: false, normal: new THREE.Vector3(0, 1, 0) };
+const _hitOut = { hit: false, point: new THREE.Vector3(), normal: new THREE.Vector3(), surface: 'concreto', distance: Infinity };
+
+const collision = {
+  /** start/end = posição dos PÉS. */
+  capsuleSweep(start, end, radius, height) {
+    let x = end.x, y = end.y, z = end.z;
+    let grounded = false;
+    _out.normal.set(0, 1, 0);
+
+    // --- vertical ---
+    if (y <= 0) { y = 0; grounded = true; }
+    for (const o of obstaculos) {
+      const b = o.box;
+      const cx = Math.max(b.min.x, Math.min(x, b.max.x));
+      const cz = Math.max(b.min.z, Math.min(z, b.max.z));
+      const d2 = (x - cx) * (x - cx) + (z - cz) * (z - cz);
+      if (d2 > radius * radius) continue;
+      // caindo sobre o topo
+      if (start.y >= b.max.y - 0.06 && y < b.max.y) { y = b.max.y; grounded = true; }
+      // batendo a cabeça
+      else if (start.y + height <= b.min.y + 0.02 && y + height > b.min.y) { y = b.min.y - height - 0.001; }
+    }
+
+    // --- horizontal (empurra para fora do retângulo mais próximo) ---
+    for (let it = 0; it < 3; it++) {
+      let moved = false;
+      for (const o of obstaculos) {
+        const b = o.box;
+        if (y + height <= b.min.y + 0.02 || y >= b.max.y - 0.02) continue;
+        const cx = Math.max(b.min.x, Math.min(x, b.max.x));
+        const cz = Math.max(b.min.z, Math.min(z, b.max.z));
+        const dx = x - cx, dz = z - cz;
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= radius * radius) continue;
+        let nx, nz, push;
+        if (d2 > 1e-8) {
+          const d = Math.sqrt(d2); nx = dx / d; nz = dz / d; push = radius - d;
+        } else {
+          // dentro da caixa: sai pela face mais próxima
+          const px = Math.min(x - b.min.x, b.max.x - x);
+          const pz = Math.min(z - b.min.z, b.max.z - z);
+          if (px < pz) { nx = x - (b.min.x + b.max.x) / 2 > 0 ? 1 : -1; nz = 0; push = px + radius; }
+          else { nx = 0; nz = z - (b.min.z + b.max.z) / 2 > 0 ? 1 : -1; push = pz + radius; }
+        }
+        x += nx * push; z += nz * push;
+        _out.normal.set(nx, 0, nz);
+        moved = true;
+      }
+      if (!moved) break;
+    }
+
+    _out.position.set(x, y, z);
+    _out.grounded = grounded;
+    return _out;
+  },
+
+  raycast(origin, dir, maxDist) {
+    _rc.set(origin, dir);
+    _rc.far = maxDist;
+    _rc.near = 0.001;
+    const hits = _rc.intersectObjects(solidos, false);
+    if (hits.length === 0) { _hitOut.hit = false; _hitOut.distance = Infinity; return _hitOut; }
+    const h = hits[0];
+    _hitOut.hit = true;
+    _hitOut.point.copy(h.point);
+    _hitOut.normal.copy(h.normal ?? new THREE.Vector3(0, 1, 0));
+    if (h.face && h.object.matrixWorld) _hitOut.normal.copy(h.face.normal).transformDirection(h.object.matrixWorld);
+    _hitOut.surface = h.object.userData.surface ?? 'concreto';
+    _hitOut.distance = h.distance;
+    return _hitOut;
+  },
+};
+
+const world = { collision, getSpawnPoints: () => [{ position: new THREE.Vector3(0, 0.2, 6), yaw: 0 }] };
+
+/* ---------------- IA falsa ---------------- */
+const _erc = new THREE.Raycaster();
+const ai = {
+  raycastEnemies(origin, dir, maxDist) {
+    _erc.set(origin, dir); _erc.far = maxDist; _erc.near = 0.001;
+    let best = null;
+    for (const a of alvos) {
+      if (a.hp <= 0) continue;
+      const hits = _erc.intersectObjects(a.parts, false);
+      if (hits.length && (!best || hits[0].distance < best.distance)) {
+        const h = hits[0];
+        best = {
+          enemyId: a.id, point: h.point.clone(),
+          normal: h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : dir.clone().negate(),
+          part: h.object.userData.part, distance: h.distance,
+        };
+      }
+    }
+    return best;
+  },
+  applyDamage(id, dmg, p) {
+    const a = alvos.find((x) => x.id === id);
+    if (!a || a.hp <= 0) return;
+    a.hp -= dmg; a.flash = 1;
+    ultimoTiro = `${dmg.toFixed(1)} ${p.part}${p.headshot ? ' HEADSHOT' : ''} @${p.point.distanceTo(camera.position).toFixed(1)}m`;
+    bus.emit('enemy:damaged', { enemyId: id, damage: dmg, point: p.point, headshot: p.headshot });
+    if (a.hp <= 0) {
+      a.group.visible = false;
+      bus.emit('enemy:killed', { enemyId: id, headshot: p.headshot, weapon: p.weapon, point: p.point });
+      setTimeout(() => { a.hp = 100; a.group.visible = true; }, 2500);
+    }
+  },
+};
+
+/* =================================================================== *
+ * Input com camada roteirizável (para o Playwright)
+ * =================================================================== */
+const realInput = new Input(canvas, bus);
+const script = {
+  on: false, mx: 0, my: 0, lx: 0, ly: 0,
+  fire: false, firePressed: false, ads: false,
+  down: {}, pressed: new Set(),
+};
+const input = {
+  get locked() { return script.on ? true : realInput.locked; },
+  get wheel() { return script.on ? 0 : realInput.wheel; },
+  getMoveVector(o) { if (!script.on) return realInput.getMoveVector(o); o.x = script.mx; o.y = script.my; return o; },
+  consumeLook(o) {
+    if (!script.on) return realInput.consumeLook(o);
+    o.x = script.lx; o.y = script.ly; script.lx = 0; script.ly = 0; return o;
+  },
+  get fireDown() { return script.on ? script.fire : realInput.fireDown; },
+  get firePressed() { return script.on ? script.firePressed : realInput.firePressed; },
+  get adsDown() { return script.on ? script.ads : realInput.adsDown; },
+  isDown(a) { return script.on ? !!script.down[a] : realInput.isDown(a); },
+  wasPressed(a) { return script.on ? script.pressed.has(a) : realInput.wasPressed(a); },
+  endFrame() { script.pressed.clear(); script.firePressed = false; realInput.endFrame(); },
+};
+
+/* =================================================================== */
+const ctx = {
+  renderer, scene, camera, viewScene, viewCamera,
+  bus, settings, input, world, ai, materials: null,
+  time: { dt: 0, elapsed: 0, frame: 0 },
+  state: 'jogando', debug: { enabled: true },
+};
+
+const player = new Player(ctx);
+ctx.player = player;
+
+let ultimoTiro = '—';
+let ultimoImpacto = '—';
+bus.on('weapon:hit', (p) => { ultimoImpacto = `${p.target}/${p.surface}`; });
+bus.on('player:footstep', (p) => { passos++; ultimoPasso = p.surface + (p.running ? ' (corrida)' : ''); });
+bus.on('player:land', (p) => { pousos++; });
+let passos = 0, pousos = 0, ultimoPasso = '—';
+
+await player.init();
+
+/* =================================================================== *
+ * Laço
+ * =================================================================== */
+const relogio = new THREE.Clock();
+let manual = false;
+let fps = 60, acumFps = 0, quadros = 0;
+
+function frame(dt) {
+  ctx.time.dt = dt; ctx.time.elapsed += dt; ctx.time.frame++;
+  player.update(dt);
+  for (const a of alvos) {
+    if (a.flash > 0) {
+      a.flash = Math.max(0, a.flash - dt * 4);
+      for (const p of a.parts) p.material.emissive?.setRGB(a.flash * 0.9, a.flash * 0.1, 0);
+    }
+  }
+  input.endFrame();
+}
+
+function render() {
+  renderer.clear();
+  renderer.render(scene, camera);
+  renderer.clearDepth();
+  renderer.render(viewScene, viewCamera);
+}
+
+function loop() {
+  requestAnimationFrame(loop);
+  if (manual) return;
+  const dt = Math.min(relogio.getDelta(), 0.05);
+  acumFps += dt; quadros++;
+  if (acumFps > 0.35) { fps = quadros / acumFps; acumFps = 0; quadros = 0; }
+  frame(dt);
+  render();
+  painel(dt);
+}
+
+/* ---------------- painel ---------------- */
+const elPainel = document.getElementById('painel');
+const miras = document.getElementById('mira').children;
+function painel() {
+  const s = player.getStatus();
+  const info = renderer.info;
+  const tri = player.viewModel.triangles;
+  elPainel.textContent =
+    `<b>FPS</b> ${fps.toFixed(0)}   tri ${(info.render.triangles / 1000).toFixed(1)}k  dc ${info.render.calls}
+<b>estado</b>    ${s.state}
+<b>velocidade</b> ${s.speed.toFixed(2)} m/s   solo ${s.grounded ? 'sim' : 'não'}
+<b>olho</b>      ${player.movement.eyeHeight.toFixed(2)} m   sup ${s.surface}
+<b>arma</b>      ${s.weapon}  [${s.fireMode}]
+<b>munição</b>   ${s.ammo} / ${s.reserve}
+<b>ADS</b>       ${(s.ads * 100).toFixed(0)}%   FOV ${player.rig.fov.x.toFixed(1)}°
+<b>spread</b>    ${s.spread.toFixed(3)}°
+<b>recuo</b>     ${(player.rig.recoilView.pitch * 57.2958).toFixed(2)}° / ${(player.rig.recoilView.yaw * 57.2958).toFixed(2)}°
+<b>vida</b>      ${s.health.toFixed(0)}
+<b>passos</b>    ${passos} (${ultimoPasso})  pousos ${pousos}
+<b>último tiro</b> ${ultimoTiro}
+<b>impacto</b>   ${ultimoImpacto}
+<b>triângulos</b> IA2 ${tri.ia2} · SMT ${tri.smt40} · PT92 ${tri.pt92}`
+      .replace(/<b>/g, '').replace(/<\/b>/g, '');
+
+  // mira dinâmica: abre com o spread
+  const g = Math.max(3, s.spread * 26 + 3) * (1 - s.ads * 0.7);
+  const L = 7 * (1 - s.ads * 0.6);
+  const set = (i, x, y, w, h) => {
+    const e = miras[i]; e.style.left = x + 'px'; e.style.top = y + 'px';
+    e.style.width = w + 'px'; e.style.height = h + 'px';
+    e.style.opacity = s.ads > 0.85 ? 0 : 0.9;
+  };
+  set(0, -1, -g - L, 2, L); set(1, -1, g, 2, L);
+  set(2, -g - L, -1, L, 2); set(3, g, -1, L, 2);
+}
+
+addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  viewCamera.aspect = innerWidth / innerHeight; viewCamera.updateProjectionMatrix();
+});
+
+const inicio = document.getElementById('inicio');
+inicio.addEventListener('click', () => { realInput.requestLock(); });
+bus.on('input:locked', () => { inicio.style.display = 'none'; });
+bus.on('input:unlocked', () => { inicio.style.display = 'grid'; });
+addEventListener('keydown', (e) => { if (e.code === 'KeyB') player.cycleFireMode(); });
+
+loop();
+
+/* =================================================================== *
+ * Ganchos de teste (Playwright)
+ * =================================================================== */
+window.__t = {
+  ready: true, ctx, player, script,
+  manual(v = true) {
+    manual = v; script.on = v;
+    document.getElementById('inicio').style.display = v ? 'none' : 'grid';
+    document.getElementById('ajuda').style.display = v ? 'none' : 'block';
+  },
+  /** Avança a simulação com passo fixo e renderiza no fim. */
+  sim(segundos, dt = 1 / 60) {
+    const n = Math.max(1, Math.round(segundos / dt));
+    for (let i = 0; i < n; i++) frame(dt);
+    render(); painel();
+    return n;
+  },
+  render() { render(); painel(); },
+  mover(x, y) { script.mx = x; script.my = y; },
+  olhar(dx, dy) { script.lx = dx; script.ly = dy; },
+  tecla(a, v) { script.down[a] = v; if (v) script.pressed.add(a); },
+  pressionar(a) { script.pressed.add(a); },
+  atirar(v) { script.fire = v; if (v) script.firePressed = true; },
+  mirar(v) { script.ads = v; },
+  arma(i) { player.weapons.switchTo(i); },
+  recarregar() { player.weapons.startReload(); },
+  gastar(n) { player.weapons.slot.ammo = Math.max(0, player.weapons.slot.ammo - n); },
+  inspecionar() { player.weapons.inspect(); },
+  status() {
+    return {
+      ...player.getStatus(),
+      pos: player.position.toArray().map((v) => +v.toFixed(3)),
+      eye: player.rig.worldPosition.toArray().map((v) => +v.toFixed(3)),
+      reloadT: player.weapons.reloadT,
+      reloading: player.weapons.reloading,
+      triangulos: player.viewModel.getTriangleReport(),
+      drawCalls: renderer.info.render.calls,
+      triRender: renderer.info.render.triangles,
+      passos, pousos,
+    };
+  },
+  /**
+   * Vitrine: mostra a arma isolada, sem pose de jogo, para inspecionar a
+   * geometria. yaw/pitch em radianos, dist em metros.
+   */
+  modelo(i, dist = 0.9, yaw = 1.05, pitch = 0.22, fov = 38) {
+    const vm = player.viewModel;
+    const ids = ['ia2', 'smt40', 'pt92'];
+    vm._select(ids[i]);
+    vm.body.position.set(0, 0, 0); vm.body.rotation.set(0, 0, 0);
+    vm.root.position.set(0, 0, 0); vm.root.quaternion.identity();
+    vm.current.group.position.set(0, 0, 0); vm.current.group.rotation.set(0, 0, 0);
+    const c = new THREE.Vector3(0, 0.03, -0.16);
+    viewCamera.position.set(
+      c.x + Math.sin(yaw) * Math.cos(pitch) * dist,
+      c.y + Math.sin(pitch) * dist,
+      c.z + Math.cos(yaw) * Math.cos(pitch) * dist);
+    viewCamera.lookAt(c);
+    viewCamera.fov = fov; viewCamera.near = 0.01; viewCamera.far = 20;
+    viewCamera.updateProjectionMatrix();
+    viewScene.background = new THREE.Color(0x23262b);
+    renderer.clear();
+    renderer.render(viewScene, viewCamera);
+    document.getElementById('painel').style.display = 'none';
+  },
+  vitrineOff() {
+    viewScene.background = null;
+    document.getElementById('painel').style.display = '';
+  },
+
+  /** Distância em pixels entre a projeção da mira e o centro da tela. */
+  erroMira() {
+    const vm = player.viewModel.current;
+    if (!vm) return null;
+    const rear = vm.meta.sightRear.clone();
+    const front = vm.meta.sightFront.clone();
+    const body = player.viewModel.body;
+    body.updateWorldMatrix(true, false);
+    const g = vm.group;
+    g.updateWorldMatrix(true, false);
+    rear.applyMatrix4(g.matrixWorld);
+    front.applyMatrix4(g.matrixWorld);
+    viewCamera.updateMatrixWorld(true);
+    const pr = rear.clone().project(viewCamera);
+    const pf = front.clone().project(viewCamera);
+    return {
+      alca: [+(pr.x * innerWidth / 2).toFixed(2), +(pr.y * innerHeight / 2).toFixed(2)],
+      massa: [+(pf.x * innerWidth / 2).toFixed(2), +(pf.y * innerHeight / 2).toFixed(2)],
+    };
+  },
+};
+</script>
+</body>
+</html>

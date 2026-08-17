@@ -1,0 +1,39 @@
+ARTE DE CAPA
+============
+
+Dois arquivos, em CAMADAS SEPARADAS:
+
+  capa_foto.webp     a arte, SEM nenhum texto
+  capa_titulo.webp   só o logotipo, com fundo TRANSPARENTE
+
+Separados de proposito. Assim o logotipo anima sozinho na abertura, fica nitido
+em qualquer resolucao e nos escolhemos onde ele assenta. Uma imagem unica com o
+titulo ja embutido nao permite nada disso — por isso esse caminho foi removido.
+
+Faltando qualquer um dos dois, nada quebra: o menu volta ao fundo em CSS
+(silhueta de morro + fiacao) e ao titulo em texto. Ver Menu._montarArte().
+
+Formato
+-------
+  proporcao    16:9 paisagem
+  resolucao    1920x1080 ou 2560x1440
+  peso         quanto menor melhor — os dois atuais somam 5,1 MB, e isso e o
+               que o jogador baixa antes de ver o menu
+
+Composicao
+----------
+O texto do menu ocupa o TERCO ESQUERDO. Deixe esse lado da arte mais calmo (ceu,
+parede lisa, sombra) e concentre o interesse visual a direita. O prompt em
+CAPA-PROMPT.md ja pede isso.
+
+Sobre o logotipo: a abertura acende um brilho ciano num ponto especifico dele
+(o pingo do "i" de AGI). A posicao NAO esta chutada — foi medida varrendo o PNG
+com tools/logo-bbox.mjs. Se voce trocar o logotipo, rode essa ferramenta de novo
+e atualize as coordenadas em src/ui/abertura.css.
+
+Ajuste fino
+-----------
+O escurecimento sobre a arte vive em src/ui/abertura.css, escopado em `.tem-arte`
+(um scrim por tela: na carga escurece as faixas de cima e de baixo; no menu
+escurece a coluna esquerda). Se a sua arte for clara demais e o texto sumir,
+aumente as opacidades ali; se for escura e a arte estiver se perdendo, diminua.

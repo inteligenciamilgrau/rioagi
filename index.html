@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Operação RIO-AGI</title>
+  <!-- Declarar o ícone evita o pedido automático a /favicon.ico (o 404 do console). -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="mask-icon" href="/favicon.svg" color="#c4571b" />
+  <meta name="theme-color" content="#0e1013" />
+  <!-- A arte da abertura é o primeiro pixel que o jogador vê: o download começa
+       antes de o módulo do jogo ser sequer analisado. -->
+  <link rel="preload" as="image" href="/capa/capa_foto.webp" fetchpriority="high" />
+  <!-- O logotipo NÃO é pré-carregado: ele só entra em cena no fim do boot, e um
+       preload que fica segundos sem uso vira aviso no console. -->
+
+  <link rel="stylesheet" href="/src/ui/styles.css" />
+  <link rel="stylesheet" href="/src/ui/abertura.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <!-- Pré-carga: o Menu só nasce a 98% do boot; até lá esta camada segura a tela
+       com a arte em vez de preto. O Menu a remove assim que a tela de
+       carregamento está pintada por baixo. Nunca recebe ponteiro. -->
+  <div id="pre-carga" aria-hidden="true">
+    <img class="arte-foto" src="/capa/capa_foto.webp" alt="" decoding="async"
+         onload="this.classList.add('pronta')" onerror="this.remove()" />
+    <div class="arte-scrim scrim-carga"></div>
+    <div class="pre-caixa">
+      <h1 class="pre-marca">Operação <span>RIO-AGI</span></h1>
+      <p class="pre-sub">Cantagalo &middot; último setor livre &middot; 17h32</p>
+      <div class="pre-barra"><i></i></div>
+      <div class="pre-status"><span>Carregando</span><span class="pct">&middot;&middot;&middot;</span></div>
+    </div>
+  </div>
+  <div id="ui-root"></div>
+  <noscript>Este jogo precisa de JavaScript e WebGL2.</noscript>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

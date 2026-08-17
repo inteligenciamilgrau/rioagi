@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>WORLD — banco do Uno com escada</title>
+  <style>html,body{margin:0;height:100%;background:#20242a;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+  <script type="module">
+    // BANCO DE TESTE do agente WORLD: monta so os veiculos, sobre um chao liso e
+    // fundo neutro, para julgar SILHUETA sem a favela por tras. Nao faz parte do
+    // jogo. Usa o fallback de materiais (mesma paleta do test/world.html).
+    import * as THREE from 'three';
+    import { Rng } from '/src/world/gen/rng.js';
+    import { Batcher } from '/src/world/gen/batcher.js';
+    import { resolveMaterials } from '/src/world/gen/materials.js';
+    import { Buildings } from '/src/world/Buildings.js';
+    import { Props } from '/src/world/Props.js';
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(1);
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#8fa2b4');
+
+    const sol = new THREE.DirectionalLight('#fff0dc', 3.0);
+    sol.position.set(11, 13, 14);
+    sol.castShadow = true;
+    sol.shadow.mapSize.set(2048, 2048);
+    sol.shadow.camera.left = -12; sol.shadow.camera.right = 12;
+    sol.shadow.camera.top = 12; sol.shadow.camera.bottom = -12;
+    sol.shadow.camera.near = 1; sol.shadow.camera.far = 60;
+    sol.shadow.bias = -0.0005; sol.shadow.normalBias = 0.02;
+    scene.add(sol);
+    scene.add(new THREE.HemisphereLight('#cfe0f0', '#8a7f70', 3.2));
+
+    const chao = new THREE.Mesh(
+      new THREE.PlaneGeometry(60, 60),
+      new THREE.MeshStandardMaterial({ color: '#5a5754', roughness: 0.96 }),
+    );
+    chao.rotation.x = -Math.PI / 2;
+    chao.receiveShadow = true;
+    scene.add(chao);
+
+    // --- monta so os veiculos ---
+    const materiais = resolveMaterials({ materials: null });
+    const bat = new Batcher(materiais, 60, 1);
+    const colStub = { addBox() {}, addGeometry() {} };
+    const terrStub = { heightAt: () => 0 };
+    const rngB = new Rng(11);
+    // Buildings so pelo lado das instancias (tijoloSolto, pneu, vidro...)
+    new Buildings({ rng: rngB, batcher: bat, collision: colStub, terrain: terrStub });
+    const props = new Props({
+      rng: new Rng(4242), batcher: bat, collision: colStub, terrain: terrStub,
+      favela: null, ancoras: null, quality: null,
+    });
+    const r = new Rng(777);
+    props._uno(0, 0, 0, 0, r);
+    props._fusca(14, 0, 0, 0, r);
+    props._kombi(-16, 0, 0, 0, r);
+    const grupo = new THREE.Group();
+    bat.build(grupo);
+    grupo.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+    scene.add(grupo);
+
+    // --- cameras ---
+    const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 300);
+    const camOrt = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
+    let atual = cam;
+
+    function render() { renderer.render(scene, atual); }
+
+    /** Camera em perspectiva: pos e alvo em coordenadas de mundo. */
+    window.__pose = (p, a, fov) => {
+      atual = cam;
+      cam.position.set(p[0], p[1], p[2]);
+      cam.fov = fov ?? cam.fov;
+      cam.aspect = innerWidth / innerHeight;
+      cam.updateProjectionMatrix();
+      cam.lookAt(a[0], a[1], a[2]);
+      render();
+    };
+    /** Camera ortografica: a prova honesta da silhueta. largura em metros. */
+    window.__orto = (p, a, larg) => {
+      atual = camOrt;
+      const asp = innerWidth / innerHeight;
+      camOrt.left = -larg / 2; camOrt.right = larg / 2;
+      camOrt.top = larg / (2 * asp); camOrt.bottom = -larg / (2 * asp);
+      camOrt.position.set(p[0], p[1], p[2]);
+      camOrt.updateProjectionMatrix();
+      camOrt.lookAt(a[0], a[1], a[2]);
+      render();
+    };
+    /** Silhueta chapada: tudo preto contra o ceu. Le forma pura, sem textura. */
+    const matSil = new THREE.MeshBasicMaterial({ color: 0x101216 });
+    const originais = new Map();
+    window.__silhueta = (on) => {
+      grupo.traverse((o) => {
+        if (!o.isMesh) return;
+        if (on) { if (!originais.has(o)) originais.set(o, o.material); o.material = matSil; }
+        else if (originais.has(o)) o.material = originais.get(o);
+      });
+      scene.background = new THREE.Color(on ? '#c9d6e2' : '#8fa2b4');
+      chao.visible = !on;
+      render();
+    };
+
+    window.__pose([9, 1.3, 9], [0, 0.9, 0], 40);
+    window.__pronto = true;
+    console.log('[unolab] pronto');
+  </script>
+</body>
+</html>

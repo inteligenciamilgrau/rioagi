@@ -1,0 +1,35 @@
+import { chromium } from 'playwright';
+import { spawn } from 'node:child_process';
+const ROOT=process.cwd(), PORT=5210;
+const vite=spawn(process.execPath,[ROOT+'/node_modules/vite/bin/vite.js','--host','127.0.0.1','--port',String(PORT),'--strictPort'],{cwd:ROOT,stdio:['ignore','pipe','pipe']});
+await new Promise((r,j)=>{let o='';const h=d=>{o+=d;if(/ready in/.test(o))r()};vite.stdout.on('data',h);vite.stderr.on('data',h);setTimeout(()=>j(new Error('t/o')),40000)});
+const b=await chromium.launch({headless:true,args:['--use-angle=default','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--autoplay-policy=no-user-gesture-required']});
+const p=await b.newPage({viewport:{width:640,height:360}});
+p.on('pageerror',e=>console.log('PAGEERR:',e.message.split('\n')[0]));
+await p.goto(`http://127.0.0.1:${PORT}/`,{waitUntil:'load',timeout:60000});
+await p.waitForFunction(()=>window.__game?.ready,{timeout:180000});
+await p.waitForTimeout(2500);
+const r=await p.evaluate(async ()=>{
+  const ctx=window.__game.ctx, M=ctx.musica;
+  const g=()=>({acao:+M.faixas.acao.gain.gain.value.toFixed(3), calma:+M.faixas.calma.gain.gain.value.toFixed(3)});
+  const esperar=(s)=>new Promise(r=>setTimeout(r,s*1000));
+  const out={};
+  ctx.state='menu'; M.update(0.016); await esperar(2.6); out.menu=g();
+  ctx.state='jogando'; M.update(0.016); await esperar(2.2); out.jogando=g();
+  ctx.state='pausado'; M.update(0.016); await esperar(2.6); out.pausado=g();
+  // slider de musica
+  ctx.state='jogando'; M.update(0.016); await esperar(2.0);
+  ctx.settings.set('musicVolume', 0.9); M.setQuality(); await esperar(0.7);
+  out.vol90=g();
+  ctx.settings.set('musicVolume', 0.1); M.setQuality(); await esperar(0.7);
+  out.vol10=g();
+  out.temSlider = !!document.querySelector('#cfg-musicVolume');
+  return out;
+});
+console.log('estado     | ganho acao | ganho calma');
+console.log('-'.repeat(42));
+for(const k of ['menu','jogando','pausado']) console.log(`${k.padEnd(10)} | ${String(r[k].acao).padStart(10)} | ${String(r[k].calma).padStart(11)}`);
+console.log(`\nslider Musica existe no menu: ${r.temSlider}`);
+console.log(`musicVolume 0.9 -> ganho acao ${r.vol90.acao}`);
+console.log(`musicVolume 0.1 -> ganho acao ${r.vol10.acao}`);
+await b.close(); vite.kill();

@@ -1,0 +1,78 @@
+{
+  "_comment": "Tomadas determinísticas. Enquadramentos MEDIDOS por tools/scout.mjs (distância livre à frente + fração de céu), não escolhidos no olho. yaw 0 = -Z; forward = (-sin y, 0, -cos y). pitch negativo olha para baixo.",
+  "viewport": { "width": 1920, "height": 1080 },
+  "settleFrames": 24,
+  "shots": [
+    {
+      "id": "01-estabelecendo",
+      "desc": "Vista aérea da encosta ao entardecer — estabelecimento",
+      "aerea": true, "pos": [70, 46, 78], "alvo": [0, 14, 0],
+      "fov": 58, "hideHud": true, "hideViewmodel": true
+    },
+    {
+      "id": "02-beco",
+      "desc": "Corredor de 30 m entre casas de tijolo — oclusão de contato e textura de perto",
+      "spawn": 9, "yaw": 90, "pitch": -3,
+      "fov": 80, "hideHud": true, "hideViewmodel": true
+    },
+    {
+      "id": "03-alto-do-morro",
+      "desc": "Parte alta (y=19,7) olhando o casario — leitura de profundidade",
+      "spawn": 0, "yaw": 90, "pitch": -5,
+      "fov": 75, "hideHud": true, "hideViewmodel": true
+    },
+    {
+      "id": "04-contraluz",
+      "desc": "Contra o sol poente (azimute do sol ≈ 55°) — céu, bloom e silhueta",
+      "spawn": 17, "yaw": 55, "pitch": 4,
+      "fov": 72, "hideHud": true, "hideViewmodel": true
+    },
+    {
+      "id": "05-viewmodel-idle",
+      "desc": "Arma em repouso no beco — objeto mais próximo da câmera",
+      "spawn": 9, "yaw": 90, "pitch": -3,
+      "fov": 80, "hideHud": true, "hideViewmodel": false
+    },
+    {
+      "id": "06-viewmodel-ads",
+      "desc": "Ferros de mira alinhados — alinhamento, DOF e escala do viewmodel",
+      "spawn": 9, "yaw": 90, "pitch": -3,
+      "fov": 80, "hideHud": true, "hideViewmodel": false, "ads": true
+    },
+    {
+      "id": "07-tiro-muzzle",
+      "desc": "Disparo contra parede de concreto a 2,6 m — clarão iluminando a geometria",
+      "spawn": 9, "yaw": 30, "pitch": -2,
+      "fov": 80, "hideHud": true, "hideViewmodel": false, "firing": true, "hour": 18.8
+    },
+    {
+      "id": "08-combate",
+      "desc": "Inimigos em campo, HUD ativo — frame de gameplay real",
+      "spawn": 15, "yaw": 30, "pitch": -2,
+      "fov": 80, "hideHud": false, "hideViewmodel": false, "spawnEnemies": 4
+    },
+    {
+      "id": "09-hud",
+      "desc": "HUD completo em combate — munição baixa, dano recente",
+      "spawn": 17, "yaw": 90, "pitch": -2,
+      "fov": 80, "hideHud": false, "hideViewmodel": false, "hudDemo": true
+    },
+    {
+      "id": "10-menu",
+      "desc": "Menu principal",
+      "menu": true
+    },
+    {
+      "id": "11-viela",
+      "desc": "Viela de 20 m — variedade de material e fiação",
+      "spawn": 7, "yaw": 90, "pitch": -4,
+      "fov": 78, "hideHud": true, "hideViewmodel": true
+    },
+    {
+      "id": "12-praca",
+      "desc": "Trecho mais aberto — caixas d'água, varais, telhado",
+      "spawn": 3, "yaw": 60, "pitch": -6,
+      "fov": 76, "hideHud": true, "hideViewmodel": true
+    }
+  ]
+}

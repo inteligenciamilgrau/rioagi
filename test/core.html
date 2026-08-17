@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CORE — Engine + Sky + Lighting + PostFX</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #hud {
+      position: fixed; left: 8px; top: 8px; z-index: 10;
+      font: 11px/1.5 ui-monospace, Consolas, monospace;
+      color: #cfc8bd; background: rgba(0,0,0,.5); padding: 6px 9px;
+      border: 1px solid rgba(255,255,255,.12); white-space: pre; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="hud">carregando…</div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { createContext } from '/src/core/GameContext.js';
+    import { EventBus } from '/src/core/EventBus.js';
+    import { Settings } from '/src/core/Settings.js';
+    import { Engine } from '/src/core/Engine.js';
+    import { Sky } from '/src/core/Sky.js';
+    import { Lighting } from '/src/core/Lighting.js';
+    import { PostFX } from '/src/core/PostFX.js';
+
+    const params = new URLSearchParams(location.search);
+    const ctx = createContext();
+    const canvas = document.getElementById('game');
+    const hud = document.getElementById('hud');
+
+    ctx.bus = new EventBus();
+    ctx.settings = new Settings(ctx.bus);
+    if (params.get('q')) ctx.settings.quality = params.get('q');
+    ctx.state = 'jogando';
+
+    ctx.engine = new Engine(ctx, canvas);
+    await ctx.engine.init();
+
+    ctx.sky = new Sky(ctx);
+    await ctx.sky.init();
+
+    ctx.lighting = new Lighting(ctx);
+    await ctx.lighting.init();
+
+    // ---------------------------------------------------------------------
+    // Cena de teste: materiais PBR simples (o modulo MAT ainda nao existe),
+    // geometria suficiente para julgar sombras longas, oclusao de contato,
+    // silhuetas e o ceu.
+    // ---------------------------------------------------------------------
+    const scene = ctx.scene;
+
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0x6b6259, roughness: 0.92, metalness: 0.0,
+    });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220, 1, 1), groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Muro comprido: sombra longa e nitida atravessando o chao.
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x8a5a44, roughness: 0.85 });
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.35, 3.2, 14), wallMat);
+    wall.position.set(4.5, 1.6, -6);
+    wall.castShadow = true; wall.receiveShadow = true;
+    scene.add(wall);
+
+    // Blocos empilhados (contato duro entre superficies -> testa AO).
+    const blockMat = new THREE.MeshStandardMaterial({ color: 0x9a9086, roughness: 0.75 });
+    for (let i = 0; i < 7; i++) {
+      const s = 0.9 + (i % 3) * 0.35;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), blockMat);
+      b.position.set(-3 + (i % 4) * 1.6, s / 2 + (i > 3 ? 0.9 : 0), -3 - Math.floor(i / 4) * 1.7);
+      b.rotation.y = i * 0.4;
+      b.castShadow = true; b.receiveShadow = true;
+      scene.add(b);
+    }
+
+    // Grade de esferas variando roughness/metalness — leitura de IBL e specular.
+    for (let x = 0; x < 6; x++) {
+      for (let y = 0; y < 2; y++) {
+        const m = new THREE.MeshStandardMaterial({
+          color: y === 0 ? 0xb8b2a6 : 0xc9a06a,
+          roughness: 0.06 + x * 0.185,
+          metalness: y === 0 ? 0.0 : 1.0,
+        });
+        const s = new THREE.Mesh(new THREE.SphereGeometry(0.5, 48, 32), m);
+        s.position.set(-4 + x * 1.6, 0.5 + y * 1.25, 1.6);
+        s.castShadow = true; s.receiveShadow = true;
+        scene.add(s);
+      }
+    }
+
+    // Poste fino: testa aliasing de silhueta e estabilidade da sombra.
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x3d3a35, roughness: 0.6, metalness: 0.7 });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 7, 12), poleMat);
+    pole.position.set(-6.5, 3.5, -1.5);
+    pole.castShadow = true;
+    scene.add(pole);
+    for (let i = 0; i < 5; i++) {
+      const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 26, 6), poleMat);
+      wire.rotation.z = Math.PI / 2;
+      wire.rotation.y = 0.06 * i;
+      wire.position.set(2, 6.4 - i * 0.16, -1.5 + i * 0.22);
+      wire.castShadow = true;
+      scene.add(wire);
+    }
+
+    // Caixotes distantes: alimenta as cascatas longe e o DOF.
+    for (let i = 0; i < 40; i++) {
+      const a = i * 2.399;
+      const d = 18 + (i % 9) * 7;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.4 + (i % 4), 1.6), blockMat);
+      b.position.set(Math.cos(a) * d, (2.4 + (i % 4)) / 2, Math.sin(a) * d - 8);
+      b.rotation.y = a;
+      b.castShadow = true; b.receiveShadow = true;
+      scene.add(b);
+    }
+
+    // ---------------------------------------------------------------------
+    // Viewmodel de mentira: valida a cena separada com FOV proprio, o depth
+    // limpo (arma nao clipa na parede) e a mascara de alpha que protege a arma
+    // do motion blur / DOF. O modulo PLAYER substitui isto.
+    // ---------------------------------------------------------------------
+    // O Engine ja adicionou ctx.viewCamera em ctx.viewScene.
+    const vmGroup = new THREE.Group();
+    vmGroup.position.set(0.20, -0.17, -0.42);
+    vmGroup.rotation.set(0.02, -0.06, 0.0);
+    ctx.viewCamera.add(vmGroup);
+
+    const gunBody = new THREE.Mesh(
+      new THREE.BoxGeometry(0.075, 0.10, 0.42),
+      new THREE.MeshStandardMaterial({ color: 0x2a2a2c, roughness: 0.45, metalness: 0.85 }));
+    gunBody.position.set(0, 0, -0.06);
+    vmGroup.add(gunBody);
+    const gunBarrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.014, 0.014, 0.30, 12),
+      new THREE.MeshStandardMaterial({ color: 0x191a1c, roughness: 0.3, metalness: 0.95 }));
+    gunBarrel.rotation.x = Math.PI / 2;
+    gunBarrel.position.set(0, 0.012, -0.36);
+    vmGroup.add(gunBarrel);
+    const gunGrip = new THREE.Mesh(
+      new THREE.BoxGeometry(0.055, 0.13, 0.06),
+      new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 0.72 }));
+    gunGrip.position.set(0, -0.10, 0.02);
+    gunGrip.rotation.x = -0.24;
+    vmGroup.add(gunGrip);
+
+    ctx.postfx = new PostFX(ctx);
+    await ctx.postfx.init();
+
+    ctx.lighting.refreshMaterials();
+
+    // Mesma fiacao que src/main.js faz: propaga troca de preset.
+    ctx.bus.on('quality:changed', ({ preset }) => {
+      for (const s of [ctx.sky, ctx.lighting, ctx.postfx]) s.setQuality?.(preset);
+      ctx.engine.setQuality?.(preset);
+    });
+
+    // ---------------------------------------------------------------------
+    // Camera / controles
+    // ---------------------------------------------------------------------
+    const cam = ctx.camera;
+    let yaw = -0.35, pitch = -0.06, dist = 0;
+    const target = new THREE.Vector3(0, 1.5, 8);
+    cam.position.copy(target);
+
+    function applyCam() {
+      cam.rotation.set(0, 0, 0);
+      cam.rotateY(yaw);
+      cam.rotateX(pitch);
+    }
+    applyCam();
+
+    let dragging = false, lx = 0, ly = 0;
+    canvas.addEventListener('pointerdown', (e) => { dragging = true; lx = e.clientX; ly = e.clientY; });
+    window.addEventListener('pointerup', () => { dragging = false; });
+    window.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      yaw -= (e.clientX - lx) * 0.004;
+      pitch -= (e.clientY - ly) * 0.004;
+      pitch = Math.max(-1.4, Math.min(1.4, pitch));
+      lx = e.clientX; ly = e.clientY;
+      applyCam();
+    });
+    const keys = new Set();
+    window.addEventListener('keydown', (e) => keys.add(e.code));
+    window.addEventListener('keyup', (e) => keys.delete(e.code));
+
+    const fwd = new THREE.Vector3(), right = new THREE.Vector3();
+    function moveCam(dt) {
+      const sp = (keys.has('ShiftLeft') ? 14 : 5) * dt;
+      cam.getWorldDirection(fwd);
+      right.crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+      if (keys.has('KeyW')) cam.position.addScaledVector(fwd, sp);
+      if (keys.has('KeyS')) cam.position.addScaledVector(fwd, -sp);
+      if (keys.has('KeyD')) cam.position.addScaledVector(right, sp);
+      if (keys.has('KeyA')) cam.position.addScaledVector(right, -sp);
+      if (keys.has('KeyE')) cam.position.y += sp;
+      if (keys.has('KeyQ')) cam.position.y -= sp;
+    }
+
+    // ---------------------------------------------------------------------
+    // Loop
+    // ---------------------------------------------------------------------
+    ctx.clock.start();
+    let acc = 0, frames = 0, fps = 0;
+
+    function frame() {
+      requestAnimationFrame(frame);
+      const dt = Math.min(ctx.clock.getDelta(), 0.05);
+      ctx.time.dt = dt; ctx.time.elapsed += dt; ctx.time.frame++;
+
+      moveCam(dt);
+      ctx.sky.update(dt, ctx.time.elapsed);
+      ctx.lighting.update(dt, ctx.time.elapsed);
+      ctx.postfx.update(dt, ctx.time.elapsed);
+      ctx.engine.render();
+
+      acc += dt; frames++;
+      if (acc > 0.5) { fps = Math.round(frames / acc); acc = 0; frames = 0; }
+      const info = ctx.renderer.info;
+      hud.textContent =
+        `${fps} fps  ${ctx.engine.renderWidth}x${ctx.engine.renderHeight}  preset=${ctx.settings.quality}\n` +
+        `draws=${info.render.calls}  tris=${info.render.triangles}  progs=${info.programs?.length ?? 0}\n` +
+        `sol el=${ctx.sky.sunElevationDeg.toFixed(1)}deg  ${ctx.sky.hours.toFixed(2)}h  cascatas=${ctx.lighting.cascades}\n` +
+        `WASD/QE mover, arrastar = olhar`;
+    }
+    requestAnimationFrame(frame);
+
+    // ---------------------------------------------------------------------
+    // Ganchos de teste (Playwright)
+    // ---------------------------------------------------------------------
+    window.__core = {
+      ctx, ready: true,
+      pose(pos, look, opts = {}) {
+        cam.position.set(pos[0], pos[1], pos[2]);
+        cam.lookAt(look[0], look[1], look[2]);
+        cam.updateMatrixWorld(true);
+        yaw = cam.rotation.y; pitch = cam.rotation.x;
+        if (opts.hour !== undefined) ctx.sky.setTimeOfDay(opts.hour);
+        if (opts.fov) { cam.fov = opts.fov; ctx.settings.fov = opts.fov; }
+      },
+      set(path, value) {
+        const parts = path.split('.');
+        let o = ctx; for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
+        o[parts[parts.length - 1]] = value;
+      },
+      settle(n = 16) {
+        for (let i = 0; i < n; i++) {
+          ctx.sky.update(0.016); ctx.lighting.update(0.016);
+          ctx.postfx.update(0.016); ctx.engine.render();
+        }
+      },
+      stats() {
+        const i = ctx.renderer.info;
+        return {
+          drawCalls: i.render.calls, triangles: i.render.triangles,
+          programs: i.programs?.length ?? 0, textures: i.memory.textures,
+          geometries: i.memory.geometries,
+          size: [ctx.engine.renderWidth, ctx.engine.renderHeight],
+        };
+      },
+    };
+    window.__coreErrors = [];
+    window.addEventListener('error', (e) => window.__coreErrors.push(String(e.message)));
+  </script>
+</body>
+</html>

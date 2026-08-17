@@ -1,0 +1,1334 @@
+/* ==========================================================================
+   OPERAÇÃO CIDADE ALTA — folha de estilo única da interface
+   Dono: agente UI.
+
+   Regras de ouro deste arquivo:
+   · Só `transform` e `opacity` são animados (compostos na GPU). Nada de
+     animar `width`, `top`, `left` ou `filter` em laço — isso força reflow
+     e engasga o frame do jogo.
+   · O HUD inteiro é `pointer-events: none`; só o menu (e seus controles)
+     recebem ponteiro, senão roubamos o pointer lock do canvas.
+   · Medidas em `vmin`/`clamp()` — o HUD tem que crescer junto com a tela,
+     de 1280×720 até 2560×1440, sem virar miniatura nem outdoor.
+   · Fontes do sistema. O jogo roda offline: nada de webfont externa.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Tokens
+   -------------------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
+
+  /* Paleta sóbria e militar: cinza-chumbo + UM acento laranja-queimado. */
+  --tinta:      #08090b;
+  --carvao:     #0e1013;
+  --chumbo:     #16191d;
+  --chumbo-2:   #1e2228;
+  --aco:        #2b3138;
+  --fumo:       #59616c;
+  --osso:       #e9e5db;
+  --osso-2:     #a49f95;
+  --osso-3:     #6f6a62;
+
+  --acento:     #c4571b;   /* laranja-queimado — o ÚNICO acento do jogo */
+  --acento-cl:  #e8873c;
+  --acento-es:  #7a3410;
+
+  --perigo:     #d8281a;
+  --sangue:     #74100c;
+
+  /* Tipografia condensada, só do sistema. Bahnschrift (Windows), DIN
+     Condensed (macOS), Roboto Condensed (Linux), Arial Narrow no resto. */
+  --f-cond: 'Bahnschrift', 'DIN Condensed', 'DIN Alternate', 'Roboto Condensed',
+            'Liberation Sans Narrow', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  --f-ui:   'Bahnschrift', 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+  --f-mono: ui-monospace, 'Cascadia Mono', 'Consolas', 'SF Mono', 'DejaVu Sans Mono', monospace;
+
+  --som-borda: 1px solid rgba(233, 229, 219, .14);
+  --sombra-txt: 0 1px 2px rgba(0, 0, 0, .95), 0 0 10px rgba(0, 0, 0, .55);
+
+  /* Estado do dano/vida, escrito por HUD.js (só leitura no CSS). */
+  --dano: 0;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: var(--osso);
+  font-family: var(--f-ui);
+  /* O canvas é o alvo do pointer lock: nada de seleção acidental de texto. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+canvas#game {
+  display: block;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Filtro de dessaturação para vida crítica — barato, só muda quando muda. */
+  transition: filter .5s linear;
+}
+canvas#game.critico { filter: saturate(.42) contrast(1.06) brightness(.93); }
+
+#ui-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* --------------------------------------------------------------------------
+   2. HUD — raiz e camadas
+   -------------------------------------------------------------------------- */
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  font-family: var(--f-cond);
+  opacity: 1;
+  transition: opacity .18s linear;
+  contain: layout style;
+}
+#hud[hidden] { display: none; }
+#hud.hud-oculto { opacity: 0; }
+
+/* Camada de vinhetas de dano ------------------------------------------------ */
+.hud-vinheta {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  will-change: opacity;
+  background:
+    radial-gradient(ellipse 78% 72% at 50% 50%,
+      rgba(0, 0, 0, 0) 42%,
+      rgba(84, 8, 5, .34) 68%,
+      rgba(108, 10, 6, .72) 88%,
+      rgba(58, 3, 2, .94) 100%);
+  /* Sem `mix-blend-mode`: blend sobre o canvas WebGL obriga o compositor a
+     reler o backdrop todo frame. Alpha puro custa zero. */
+}
+.hud-vinheta-quente {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  will-change: opacity;
+  background:
+    radial-gradient(ellipse 70% 66% at 50% 50%,
+      rgba(0, 0, 0, 0) 46%,
+      rgba(190, 32, 18, .18) 74%,
+      rgba(232, 54, 30, .46) 100%);
+}
+
+/* Pulsação de batimento cardíaco: só entra quando a vida é crítica. */
+.hud-batimento {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background:
+    radial-gradient(ellipse 64% 60% at 50% 50%,
+      rgba(0, 0, 0, 0) 38%,
+      rgba(150, 14, 8, .36) 76%,
+      rgba(96, 6, 4, .80) 100%);
+}
+#hud.critico .hud-batimento {
+  animation: batimento 1.15s cubic-bezier(.3, 0, .2, 1) infinite;
+}
+@keyframes batimento {
+  0%   { opacity: .30; }
+  8%   { opacity: .96; }
+  22%  { opacity: .40; }
+  32%  { opacity: .78; }
+  60%  { opacity: .26; }
+  100% { opacity: .30; }
+}
+
+/* Cicatriz/respingo de sangue na tela — SVG procedural, sem imagem. */
+.hud-sangue {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  will-change: opacity;
+  transition: opacity .8s ease-out;
+}
+.hud-sangue svg { width: 100%; height: 100%; display: block; }
+
+/* Mira ---------------------------------------------------------------------- */
+.hud-mira {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  /* Quadrado de lado = altura da tela: o viewBox vira uma medida angular
+     exata (1000 unidades = meia altura de tela = tan(fov/2)). */
+  width: 100vh;
+  height: 100vh;
+  transform: translate(-50%, -50%);
+  opacity: 1;
+  transition: opacity .12s linear;
+  overflow: visible;
+}
+.hud-mira.ads { opacity: 0; }
+.hud-mira svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.hud-mira .traco {
+  fill: #f2efe8;
+  fill-opacity: .92;
+}
+.hud-mira .traco-borda {
+  fill: #000;
+  fill-opacity: .55;
+}
+.hud-mira .grupo-tracos {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+/* Ponto central: exatamente 1px, fora do SVG para não sofrer arredondamento. */
+.hud-ponto {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1px;
+  height: 1px;
+  margin: -1px 0 0 -1px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .55), 0 0 3px 1px rgba(0, 0, 0, .8);
+  opacity: .95;
+}
+
+/* Hitmarker ------------------------------------------------------------------ */
+.hud-hit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: clamp(26px, 4.2vmin, 62px);
+  height: clamp(26px, 4.2vmin, 62px);
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.hud-hit svg { width: 100%; height: 100%; display: block; }
+.hud-hit .hm { stroke: #fff; stroke-width: 11; stroke-linecap: butt; }
+.hud-hit .hm-sombra { stroke: rgba(0, 0, 0, .72); stroke-width: 19; stroke-linecap: butt; }
+.hud-hit.headshot .hm { stroke: #ff4b34; }
+.hud-hit.morte .hm { stroke: #ffd8a0; }
+.hud-hit .hm-anel { display: none; fill: none; stroke: #ffd8a0; stroke-width: 5; opacity: .9; }
+.hud-hit.morte .hm-anel { display: block; }
+
+/* Bússola -------------------------------------------------------------------- */
+.hud-bussola {
+  position: absolute;
+  top: clamp(10px, 1.9vmin, 26px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: clamp(260px, 40vmin, 620px);
+  height: clamp(26px, 3.6vmin, 46px);
+  overflow: hidden;
+  /* Esmaece nas pontas: fita de bússola não tem borda, tem horizonte. */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 13%, #000 87%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 13%, #000 87%, transparent 100%);
+}
+.hud-bussola-fita {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+.hud-bussola i {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  background: rgba(233, 229, 219, .42);
+  transform: translateX(-.5px);
+}
+.hud-bussola i.menor { height: 22%; opacity: .55; }
+.hud-bussola i.maior { height: 40%; }
+.hud-bussola b {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-family: var(--f-cond);
+  font-weight: 600;
+  font-size: clamp(11px, 1.55vmin, 19px);
+  letter-spacing: .1em;
+  color: rgba(233, 229, 219, .80);
+  text-shadow: var(--sombra-txt);
+  line-height: 1.05;
+}
+.hud-bussola b.cardeal { color: var(--osso); font-size: clamp(12px, 1.8vmin, 22px); }
+.hud-bussola b.cardeal.norte { color: var(--acento-cl); }
+.hud-bussola b.grau { color: rgba(233, 229, 219, .46); font-size: clamp(9px, 1.25vmin, 15px); font-weight: 400; }
+
+/* Marcadores de objetivo sobre a fita. */
+.hud-bussola-obj { position: absolute; inset: 0; }
+.hud-bussola-obj .obj {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  will-change: transform;
+}
+.hud-bussola-obj .obj s {
+  position: absolute;
+  left: 50%;
+  top: 6%;
+  width: clamp(8px, 1.1vmin, 13px);
+  height: clamp(8px, 1.1vmin, 13px);
+  margin-left: calc(clamp(8px, 1.1vmin, 13px) / -2);
+  background: var(--acento);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .8);
+  transform: rotate(45deg);
+  text-decoration: none;
+}
+.hud-bussola-obj .obj.alvo s { background: var(--perigo); }
+
+/* Agulha central + leitura numérica do rumo. */
+.hud-bussola-agulha {
+  position: absolute;
+  top: clamp(10px, 1.9vmin, 26px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: clamp(4px, .55vmin, 7px) solid transparent;
+  border-right: clamp(4px, .55vmin, 7px) solid transparent;
+  border-top: clamp(6px, .8vmin, 10px) solid var(--acento);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .9));
+}
+.hud-rumo {
+  position: absolute;
+  top: calc(clamp(10px, 1.9vmin, 26px) + clamp(26px, 3.6vmin, 46px) + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--f-cond);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(10px, 1.35vmin, 16px);
+  letter-spacing: .16em;
+  color: var(--osso-2);
+  text-shadow: var(--sombra-txt);
+}
+
+/* Minimapa ------------------------------------------------------------------- */
+.hud-mapa {
+  position: absolute;
+  top: clamp(10px, 1.9vmin, 26px);
+  left: clamp(10px, 1.9vmin, 26px);
+  width: clamp(150px, 21vmin, 320px);
+  height: clamp(150px, 21vmin, 320px);
+}
+.hud-mapa canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #0a0c0e;
+  /* Redondo: o recorte circular ja e como o minimapa desenha (blips presos
+     na borda por raio), entao a moldura quadrada mentia sobre o alcance. */
+  border-radius: 50%;
+  border: 1px solid rgba(233, 229, 219, .20);
+  box-shadow: 0 2px 18px rgba(0, 0, 0, .6), inset 0 0 22px rgba(0, 0, 0, .55);
+}
+.hud-mapa .setor {
+  position: absolute;
+  left: 0;
+  bottom: calc(-1 * clamp(15px, 2.1vmin, 26px));
+  display: flex;
+  gap: .7em;
+  align-items: baseline;
+  font-family: var(--f-cond);
+  font-size: clamp(9px, 1.2vmin, 14px);
+  letter-spacing: .2em;
+  color: var(--osso-3);
+  text-transform: uppercase;
+  text-shadow: var(--sombra-txt);
+}
+.hud-mapa .setor em { font-style: normal; color: var(--acento); }
+
+/* Killfeed ------------------------------------------------------------------- */
+.hud-feed {
+  position: absolute;
+  top: clamp(10px, 1.9vmin, 26px);
+  right: clamp(10px, 1.9vmin, 26px);
+  width: clamp(220px, 30vmin, 440px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: clamp(3px, .45vmin, 6px);
+}
+.feed-linha {
+  display: flex;
+  align-items: center;
+  gap: .55em;
+  padding: clamp(2px, .35vmin, 5px) clamp(5px, .7vmin, 9px);
+  background: rgba(8, 9, 11, .62);
+  border-right: 2px solid var(--aco);
+  font-family: var(--f-cond);
+  font-size: clamp(11px, 1.5vmin, 18px);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--osso-2);
+  text-shadow: var(--sombra-txt);
+  transform-origin: 100% 50%;
+  will-change: transform, opacity;
+}
+.feed-linha.propria { border-right-color: var(--acento); background: rgba(20, 10, 4, .68); }
+.feed-linha .autor { color: var(--acento-cl); font-weight: 600; }
+.feed-linha .alvo  { color: var(--osso); font-weight: 600; }
+.feed-linha svg { display: block; height: clamp(11px, 1.5vmin, 18px); width: auto; flex: none; }
+.feed-linha .arma path, .feed-linha .arma rect { fill: var(--osso); }
+.feed-linha .hs path, .feed-linha .hs circle { fill: var(--perigo); }
+
+/* Indicador de direção do dano ---------------------------------------------- */
+.hud-dano {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: clamp(190px, 42vmin, 560px);
+  height: clamp(190px, 42vmin, 560px);
+  transform: translate(-50%, -50%);
+}
+.hud-dano .arco {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.hud-dano .arco svg { width: 100%; height: 100%; display: block; }
+.hud-dano .arco .lamina { fill: rgba(226, 40, 24, .88); }
+.hud-dano .arco .contorno { fill: rgba(0, 0, 0, .55); }
+
+/* Munição -------------------------------------------------------------------- */
+.hud-municao {
+  position: absolute;
+  right: clamp(14px, 2.6vmin, 40px);
+  bottom: clamp(12px, 2.2vmin, 34px);
+  text-align: right;
+  font-family: var(--f-cond);
+  text-shadow: var(--sombra-txt);
+  will-change: transform, opacity;
+}
+.hud-municao .arma {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: .7em;
+  font-size: clamp(11px, 1.55vmin, 19px);
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  color: var(--osso-2);
+  margin-bottom: clamp(1px, .25vmin, 4px);
+}
+.hud-municao .modo {
+  color: var(--acento-cl);
+  border: 1px solid rgba(196, 87, 27, .55);
+  padding: 0 .45em;
+  font-size: .88em;
+  letter-spacing: .18em;
+  background: rgba(196, 87, 27, .1);
+}
+.hud-municao .numeros {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: .16em;
+  font-variant-numeric: tabular-nums;
+  line-height: .92;
+}
+.hud-municao .pente {
+  font-size: clamp(38px, 6.4vmin, 96px);
+  font-weight: 700;
+  font-stretch: condensed;
+  color: var(--osso);
+  transform-origin: 50% 50%;
+  will-change: transform;
+  display: inline-block;
+  transition: color .18s linear;
+}
+.hud-municao.baixo .pente { color: var(--perigo); }
+.hud-municao.vazio .pente { color: var(--perigo); animation: pisca-vazio .55s steps(1) infinite; }
+@keyframes pisca-vazio { 0%, 60% { opacity: 1; } 61%, 100% { opacity: .35; } }
+.hud-municao .barra {
+  font-size: clamp(20px, 3.2vmin, 48px);
+  color: var(--osso-3);
+  font-weight: 300;
+  padding: 0 .1em;
+}
+.hud-municao .reserva {
+  font-size: clamp(20px, 3.2vmin, 48px);
+  font-weight: 600;
+  color: var(--osso-2);
+}
+.hud-municao .aviso {
+  margin-top: clamp(1px, .3vmin, 4px);
+  font-size: clamp(10px, 1.3vmin, 16px);
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: var(--acento-cl);
+  opacity: 0;
+  transition: opacity .12s linear;
+}
+.hud-municao.recarregando .aviso,
+.hud-municao.vazio .aviso { opacity: 1; }
+
+/* Régua de balas: leitura periférica do pente sem ler número. */
+.hud-balas {
+  display: flex;
+  justify-content: flex-end;
+  gap: clamp(1px, .18vmin, 3px);
+  margin-top: clamp(3px, .45vmin, 7px);
+  height: clamp(3px, .42vmin, 6px);
+}
+.hud-balas i {
+  width: clamp(2px, .3vmin, 4px);
+  height: 100%;
+  background: var(--osso-2);
+  opacity: .85;
+  transform-origin: 50% 100%;
+}
+.hud-balas i.gasta { background: var(--osso-3); opacity: .3; transform: scaleY(.45); }
+.hud-municao.baixo .hud-balas i:not(.gasta) { background: var(--perigo); }
+
+/* Estado / FPS --------------------------------------------------------------- */
+.hud-fps {
+  position: absolute;
+  left: clamp(10px, 1.9vmin, 26px);
+  bottom: clamp(10px, 1.9vmin, 26px);
+  font-family: var(--f-mono);
+  font-size: clamp(9px, 1.15vmin, 14px);
+  letter-spacing: .06em;
+  color: var(--osso-3);
+  text-shadow: var(--sombra-txt);
+  font-variant-numeric: tabular-nums;
+}
+.hud-fps.ruim { color: var(--acento-cl); }
+
+.hud-aviso {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(56px, 9vmin, 120px);
+  transform: translateX(-50%) translateY(6px);
+  padding: .35em 1.1em;
+  background: rgba(8, 9, 11, .78);
+  border-left: 2px solid var(--acento);
+  font-family: var(--f-cond);
+  font-size: clamp(11px, 1.4vmin, 17px);
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--osso-2);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* --------------------------------------------------------------------------
+   3. Menu — raiz, telas e componentes
+   -------------------------------------------------------------------------- */
+#menu-root {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  font-family: var(--f-ui);
+}
+#menu-root .tela {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .22s ease-out, visibility .22s;
+  pointer-events: none;
+}
+#menu-root .tela.ativa {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* Fundo comum: entardecer sobre a encosta, 100% CSS. ------------------------ */
+.fundo-ceu {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 82% at 22% 108%, rgba(196, 87, 27, .30) 0%, rgba(196, 87, 27, 0) 58%),
+    radial-gradient(90% 60% at 78% -8%, rgba(60, 82, 110, .30) 0%, rgba(60, 82, 110, 0) 62%),
+    linear-gradient(178deg, #0a0d12 0%, #12151a 40%, #1d1a19 72%, #2a1c12 100%);
+}
+/* Vinheta pesada por cima do gradiente — dá profundidade e ancora o texto. */
+.fundo-vinheta {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 82% 78% at 40% 44%,
+    rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, .55) 76%, rgba(0, 0, 0, .92) 100%);
+}
+/* Silhueta da favela em clip-path: casario empilhado, caixas d'água, antenas. */
+.fundo-morro {
+  position: absolute;
+  left: -2%;
+  right: -2%;
+  bottom: 0;
+  height: 46%;
+  background: linear-gradient(180deg, #0b0c0e 0%, #08090a 100%);
+  clip-path: polygon(
+    0% 100%, 0% 62%, 3% 62%, 3% 54%, 7% 54%, 7% 66%, 11% 66%, 11% 47%,
+    14% 47%, 14% 41%, 18% 41%, 18% 58%, 22% 58%, 22% 50%, 25% 50%, 25% 36%,
+    29% 36%, 29% 44%, 33% 44%, 33% 31%, 36% 31%, 36% 24%, 40% 24%, 40% 38%,
+    44% 38%, 44% 29%, 47% 29%, 47% 17%, 51% 17%, 51% 26%, 55% 26%, 55% 12%,
+    59% 12%, 59% 22%, 62% 22%, 62% 9%, 66% 9%, 66% 20%, 70% 20%, 70% 31%,
+    74% 31%, 74% 22%, 78% 22%, 78% 37%, 82% 37%, 82% 27%, 86% 27%, 86% 44%,
+    90% 44%, 90% 33%, 94% 33%, 94% 52%, 97% 52%, 97% 42%, 100% 42%, 100% 100%);
+  opacity: .96;
+}
+.fundo-morro.longe {
+  height: 58%;
+  background: linear-gradient(180deg, #171a20 0%, #101318 100%);
+  opacity: .8;
+  clip-path: polygon(
+    0% 100%, 0% 48%, 5% 48%, 5% 40%, 10% 40%, 10% 52%, 15% 52%, 15% 33%,
+    20% 33%, 20% 44%, 26% 44%, 26% 26%, 31% 26%, 31% 36%, 37% 36%, 37% 19%,
+    43% 19%, 43% 30%, 49% 30%, 49% 14%, 55% 14%, 55% 25%, 61% 25%, 61% 11%,
+    67% 11%, 67% 23%, 73% 23%, 73% 30%, 79% 30%, 79% 20%, 85% 20%, 85% 38%,
+    91% 38%, 91% 28%, 96% 28%, 96% 46%, 100% 46%, 100% 100%);
+}
+/* Fiação elétrica cruzando o céu — dois fios finos em rotação leve. */
+.fundo-fio {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  height: 1px;
+  background: rgba(0, 0, 0, .8);
+  box-shadow: 0 6px 0 -0.5px rgba(0, 0, 0, .55), 0 15px 0 -0.5px rgba(0, 0, 0, .35);
+}
+.fundo-fio.a { top: 38%; transform: rotate(-1.6deg); }
+.fundo-fio.b { top: 51%; transform: rotate(1.1deg); }
+/* Granulação de filme, gerada por SVG (sem imagem externa). */
+.fundo-grao {
+  position: absolute;
+  inset: 0;
+  opacity: .16;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+.fundo-grao svg { width: 100%; height: 100%; display: block; }
+
+/* --- Tela de carregamento --------------------------------------------------- */
+#tela-carga { background: #06070a; }
+#tela-carga .carga-caixa {
+  position: absolute;
+  left: clamp(24px, 7vw, 140px);
+  bottom: clamp(40px, 12vh, 140px);
+  right: clamp(24px, 7vw, 140px);
+  max-width: 900px;
+}
+#tela-carga .marca {
+  font-family: var(--f-cond);
+  font-size: clamp(20px, 3.4vmin, 46px);
+  font-weight: 700;
+  letter-spacing: .34em;
+  text-transform: uppercase;
+  color: var(--osso);
+  margin: 0 0 .35em;
+}
+#tela-carga .marca span { color: var(--acento); }
+#tela-carga .sub {
+  font-family: var(--f-cond);
+  font-size: clamp(10px, 1.4vmin, 16px);
+  letter-spacing: .42em;
+  text-transform: uppercase;
+  color: var(--osso-3);
+  margin: 0 0 clamp(18px, 3vh, 40px);
+}
+.barra-carga {
+  position: relative;
+  height: 3px;
+  background: rgba(233, 229, 219, .12);
+  overflow: hidden;
+}
+.barra-carga .preenche {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--acento-es), var(--acento) 62%, var(--acento-cl));
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  will-change: transform;
+  transition: transform .35s cubic-bezier(.2, .7, .2, 1);
+}
+.barra-carga .brilho {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 32%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .22), transparent);
+  transform: translateX(-120%);
+  animation: varre 1.5s linear infinite;
+}
+@keyframes varre { to { transform: translateX(420%); } }
+#tela-carga .linha-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: clamp(8px, 1.4vh, 16px);
+  font-family: var(--f-cond);
+  font-size: clamp(10px, 1.35vmin, 16px);
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: var(--osso-2);
+}
+#tela-carga .pct { color: var(--acento-cl); font-variant-numeric: tabular-nums; }
+#tela-carga .dica {
+  position: absolute;
+  left: clamp(24px, 7vw, 140px);
+  top: clamp(28px, 6vh, 70px);
+  max-width: 46ch;
+  font-family: var(--f-cond);
+  font-size: clamp(11px, 1.5vmin, 17px);
+  line-height: 1.6;
+  letter-spacing: .06em;
+  color: var(--osso-3);
+  border-left: 2px solid var(--acento-es);
+  padding-left: 1em;
+}
+#tela-carga .dica b { color: var(--osso-2); font-weight: 600; letter-spacing: .18em; display: block; font-size: .82em; margin-bottom: .3em; }
+
+/* --- Menu principal --------------------------------------------------------- */
+.painel {
+  position: absolute;
+  left: clamp(24px, 8vw, 170px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(560px, 46vw);
+  min-width: 300px;
+}
+#tela-menu .titulo {
+  font-family: var(--f-cond);
+  font-weight: 700;
+  font-stretch: condensed;
+  font-size: clamp(34px, 6.4vmin, 92px);
+  line-height: .96;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+  color: var(--osso);
+  margin: 0;
+  text-shadow: 0 3px 26px rgba(0, 0, 0, .9);
+}
+#tela-menu .titulo em { font-style: normal; display: block; color: var(--acento); }
+#tela-menu .regua {
+  height: 2px;
+  width: clamp(70px, 12vmin, 150px);
+  background: var(--acento);
+  margin: clamp(12px, 2vh, 24px) 0 clamp(9px, 1.4vh, 18px);
+}
+#tela-menu .subtitulo {
+  font-family: var(--f-cond);
+  font-size: clamp(11px, 1.55vmin, 18px);
+  letter-spacing: .34em;
+  text-transform: uppercase;
+  color: var(--osso-3);
+  margin: 0 0 clamp(24px, 4.6vh, 58px);
+  line-height: 1.7;
+}
+
+.lista-botoes { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+
+.bt {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 380px;
+  padding: clamp(9px, 1.5vh, 17px) clamp(14px, 1.6vw, 26px);
+  background: rgba(14, 16, 19, .55);
+  border: 0;
+  border-left: 2px solid rgba(233, 229, 219, .18);
+  color: var(--osso-2);
+  font-family: var(--f-cond);
+  font-size: clamp(13px, 1.85vmin, 22px);
+  font-weight: 600;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color .13s linear, background-color .13s linear, border-color .13s linear;
+  overflow: hidden;
+}
+.bt::before {
+  /* Faixa de realce que desliza da esquerda — transform, não width. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(196, 87, 27, .26), rgba(196, 87, 27, 0) 78%);
+  transform: translateX(-100%);
+  transition: transform .16s cubic-bezier(.2, .7, .2, 1);
+}
+.bt:hover, .bt:focus-visible {
+  color: var(--osso);
+  border-left-color: var(--acento);
+  outline: none;
+}
+.bt:hover::before, .bt:focus-visible::before { transform: translateX(0); }
+.bt:active { color: var(--acento-cl); }
+.bt span { position: relative; }
+.bt.primario {
+  color: var(--osso);
+  border-left-color: var(--acento);
+  background: rgba(28, 18, 10, .6);
+  font-size: clamp(15px, 2.15vmin, 26px);
+}
+.bt.perigo { border-left-color: var(--perigo); }
+.bt.perigo:hover { color: #fff; }
+.bt.perigo::before { background: linear-gradient(90deg, rgba(216, 40, 26, .3), rgba(216, 40, 26, 0) 78%); }
+
+.rodape {
+  position: absolute;
+  left: clamp(24px, 8vw, 170px);
+  bottom: clamp(18px, 3vh, 40px);
+  right: clamp(24px, 8vw, 170px);
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--f-mono);
+  font-size: clamp(9px, 1.1vmin, 13px);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #4a4640;
+}
+
+/* --- Painel de configurações / controles ------------------------------------ */
+.folha {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(6, 7, 9, .90);
+}
+.folha-topo {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1.6vw, 24px);
+  padding: clamp(14px, 2.4vh, 30px) clamp(24px, 6vw, 120px) clamp(10px, 1.6vh, 20px);
+  border-bottom: 1px solid rgba(233, 229, 219, .1);
+}
+.folha-topo h2 {
+  margin: 0;
+  font-family: var(--f-cond);
+  font-size: clamp(17px, 2.6vmin, 34px);
+  font-weight: 700;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: var(--osso);
+}
+.folha-topo .traco-h { flex: 1; height: 1px; background: rgba(233, 229, 219, .14); }
+.folha-corpo {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(14px, 2.4vh, 30px) clamp(24px, 6vw, 120px) clamp(24px, 4vh, 60px);
+}
+.folha-rodape {
+  padding: clamp(10px, 1.6vh, 20px) clamp(24px, 6vw, 120px) clamp(16px, 2.6vh, 32px);
+  border-top: 1px solid rgba(233, 229, 219, .1);
+  display: flex;
+  gap: 10px;
+}
+.folha-rodape .bt { max-width: 240px; }
+
+.grupo { margin-bottom: clamp(16px, 2.8vh, 38px); }
+.grupo > h3 {
+  margin: 0 0 clamp(8px, 1.2vh, 14px);
+  font-family: var(--f-cond);
+  font-size: clamp(10px, 1.3vmin, 15px);
+  font-weight: 600;
+  letter-spacing: .38em;
+  text-transform: uppercase;
+  color: var(--acento);
+  border-bottom: 1px solid rgba(196, 87, 27, .28);
+  padding-bottom: .5em;
+}
+
+.linha {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.15fr) minmax(160px, 2fr) minmax(58px, auto);
+  align-items: center;
+  gap: clamp(10px, 1.6vw, 26px);
+  padding: clamp(6px, .9vh, 11px) 0;
+  border-bottom: 1px solid rgba(233, 229, 219, .05);
+}
+.linha > label {
+  font-family: var(--f-cond);
+  font-size: clamp(12px, 1.6vmin, 19px);
+  letter-spacing: .17em;
+  text-transform: uppercase;
+  color: var(--osso-2);
+}
+.linha .valor {
+  font-family: var(--f-mono);
+  font-size: clamp(10px, 1.25vmin, 15px);
+  color: var(--acento-cl);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.linha .nota {
+  grid-column: 1 / -1;
+  font-family: var(--f-cond);
+  font-size: clamp(10px, 1.25vmin, 15px);
+  letter-spacing: .05em;
+  color: var(--osso-3);
+  margin-top: -.2em;
+}
+
+/* Segmentado (presets de qualidade / opções curtas) */
+.segmentado { display: flex; gap: 2px; }
+.segmentado button {
+  flex: 1;
+  padding: clamp(5px, .8vh, 10px) 0;
+  background: rgba(30, 34, 40, .8);
+  border: 1px solid rgba(233, 229, 219, .1);
+  color: var(--osso-3);
+  font-family: var(--f-cond);
+  font-size: clamp(10px, 1.3vmin, 15px);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color .12s linear, background-color .12s linear, border-color .12s linear;
+}
+.segmentado button:hover { color: var(--osso); border-color: rgba(233, 229, 219, .3); }
+.segmentado button[aria-pressed='true'] {
+  background: var(--acento-es);
+  border-color: var(--acento);
+  color: #fff;
+}
+.segmentado button:focus-visible { outline: 1px solid var(--acento-cl); outline-offset: 1px; }
+
+/* Slider */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  margin: 0;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 2px;
+  background: rgba(233, 229, 219, .18);
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 16px;
+  margin-top: -7px;
+  background: var(--acento);
+  border: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .6);
+}
+input[type='range']:hover::-webkit-slider-thumb { background: var(--acento-cl); }
+input[type='range']:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--osso); }
+input[type='range']::-moz-range-track { height: 2px; background: rgba(233, 229, 219, .18); }
+input[type='range']::-moz-range-thumb {
+  width: 10px; height: 16px; border-radius: 0; border: 0; background: var(--acento);
+}
+
+/* Interruptor */
+.chave {
+  position: relative;
+  width: 46px;
+  height: 18px;
+  background: rgba(30, 34, 40, .9);
+  border: 1px solid rgba(233, 229, 219, .14);
+  cursor: pointer;
+  pointer-events: auto;
+  padding: 0;
+}
+.chave i {
+  position: absolute;
+  left: 1px; top: 1px;
+  width: 20px; height: 14px;
+  background: var(--fumo);
+  transform: translateX(0);
+  transition: transform .13s cubic-bezier(.2, .7, .2, 1), background-color .13s linear;
+}
+.chave[aria-pressed='true'] { border-color: var(--acento); }
+.chave[aria-pressed='true'] i { transform: translateX(22px); background: var(--acento); }
+.chave:focus-visible { outline: 1px solid var(--acento-cl); outline-offset: 2px; }
+
+/* Tabela de controles */
+.controles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 clamp(20px, 4vw, 70px); }
+.controles div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1em;
+  padding: clamp(5px, .8vh, 10px) 0;
+  border-bottom: 1px solid rgba(233, 229, 219, .06);
+  font-family: var(--f-cond);
+  font-size: clamp(12px, 1.55vmin, 18px);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--osso-2);
+}
+.controles kbd {
+  font-family: var(--f-mono);
+  font-size: .82em;
+  letter-spacing: .08em;
+  color: var(--osso);
+  background: rgba(30, 34, 40, .9);
+  border: 1px solid rgba(233, 229, 219, .14);
+  border-bottom-width: 2px;
+  padding: .12em .5em;
+  white-space: nowrap;
+}
+
+/* --- Pausa ------------------------------------------------------------------ */
+#tela-pausa .desfoque {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 7, 9, .52);
+  -webkit-backdrop-filter: blur(16px) saturate(.55) brightness(.62);
+  backdrop-filter: blur(16px) saturate(.55) brightness(.62);
+}
+#tela-pausa .painel { top: 50%; }
+#tela-pausa .titulo-pausa {
+  font-family: var(--f-cond);
+  font-size: clamp(24px, 4.4vmin, 62px);
+  font-weight: 700;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: var(--osso);
+  margin: 0 0 .1em;
+}
+#tela-pausa .op-sub {
+  font-family: var(--f-cond);
+  font-size: clamp(10px, 1.35vmin, 16px);
+  letter-spacing: .38em;
+  text-transform: uppercase;
+  color: var(--acento);
+  margin: 0 0 clamp(20px, 3.4vh, 44px);
+}
+
+/* --- Morte ------------------------------------------------------------------ */
+#tela-morte .sangria {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 80% at 50% 50%, rgba(96, 6, 4, .35) 0%, rgba(58, 2, 2, .82) 62%, rgba(20, 0, 0, .96) 100%);
+}
+#tela-morte .centro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 1.4vh, 18px);
+  text-align: center;
+}
+#tela-morte h1 {
+  margin: 0;
+  font-family: var(--f-cond);
+  font-size: clamp(30px, 5.6vmin, 78px);
+  font-weight: 700;
+  letter-spacing: .26em;
+  text-transform: uppercase;
+  color: #f2e9e2;
+  text-shadow: 0 3px 30px rgba(0, 0, 0, .9);
+}
+#tela-morte p {
+  margin: 0 0 clamp(16px, 2.6vh, 34px);
+  font-family: var(--f-cond);
+  font-size: clamp(11px, 1.5vmin, 18px);
+  letter-spacing: .36em;
+  text-transform: uppercase;
+  color: rgba(242, 233, 226, .55);
+}
+#tela-morte .lista-botoes { align-items: center; }
+#tela-morte .bt { min-width: clamp(220px, 26vmin, 340px); text-align: center; letter-spacing: .32em; }
+
+/* --------------------------------------------------------------------------
+   4. Entradas de tela (transform/opacity apenas)
+   -------------------------------------------------------------------------- */
+@keyframes entra-baixo {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.tela.ativa .painel > *,
+.tela.ativa .folha-corpo > .grupo {
+  animation: entra-baixo .3s cubic-bezier(.2, .75, .25, 1) backwards;
+}
+.tela.ativa .painel > *:nth-child(1) { animation-delay: .02s; }
+.tela.ativa .painel > *:nth-child(2) { animation-delay: .05s; }
+.tela.ativa .painel > *:nth-child(3) { animation-delay: .08s; }
+.tela.ativa .painel > *:nth-child(4) { animation-delay: .11s; }
+.tela.ativa .folha-corpo > .grupo:nth-child(2) { animation-delay: .04s; }
+.tela.ativa .folha-corpo > .grupo:nth-child(3) { animation-delay: .07s; }
+.tela.ativa .folha-corpo > .grupo:nth-child(4) { animation-delay: .10s; }
+
+/* --------------------------------------------------------------------------
+   5. Acessibilidade e telas pequenas
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  #hud.critico .hud-batimento { animation: none; opacity: .5; }
+  .barra-carga .brilho { display: none; }
+  .hud-municao.vazio .pente { animation: none; }
+}
+
+@media (max-width: 720px) {
+  .painel { left: 5vw; right: 5vw; width: auto; }
+  .linha { grid-template-columns: 1fr; gap: 4px; }
+  .linha .valor { text-align: left; }
+  .hud-bussola { width: 72vw; }
+}
+
+/* --- Leitura numérica de vida (canto inferior esquerdo) --------------------- */
+.hud-vida {
+  position: absolute;
+  left: clamp(18px, 3vw, 54px);
+  bottom: clamp(18px, 3.4vh, 52px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--f-cond);
+  text-shadow: var(--sombra-txt);
+  pointer-events: none;
+}
+.hud-vida .rot {
+  font-size: clamp(9px, 1.1vmin, 13px);
+  letter-spacing: .34em;
+  color: var(--osso-3);
+  text-transform: uppercase;
+}
+.hud-vida .num {
+  font-size: clamp(26px, 4.4vmin, 58px);
+  font-weight: 700;
+  line-height: .9;
+  color: var(--osso);
+  font-variant-numeric: tabular-nums;
+  transition: color .18s linear;
+}
+.hud-vida .trilho {
+  width: clamp(90px, 13vmin, 170px);
+  height: 3px;
+  background: rgba(233, 229, 219, .14);
+  overflow: hidden;
+}
+.hud-vida .trilho i {
+  display: block;
+  width: 100%; height: 100%;
+  background: var(--osso-2);
+  transform-origin: 0 50%;
+  transform: scaleX(1);
+  transition: transform .22s cubic-bezier(.2, .7, .2, 1), background-color .18s linear;
+}
+.hud-vida.baixa .num { color: var(--acento-cl); }
+.hud-vida.baixa .trilho i { background: var(--acento); }
+.hud-vida.critica .num { color: var(--perigo); }
+.hud-vida.critica .trilho i { background: var(--perigo); }
+@media (prefers-reduced-motion: reduce) {
+  .hud-vida .num, .hud-vida .trilho i { transition: none; }
+}
+
+/* --- Onda / meta de abates (abaixo do minimapa) ----------------------------- */
+.hud-onda {
+  position: absolute;
+  left: clamp(18px, 3vw, 54px);
+  top: clamp(180px, 26vh, 320px);
+  width: clamp(120px, 16vmin, 210px);
+  font-family: var(--f-cond);
+  text-shadow: var(--sombra-txt);
+  pointer-events: none;
+}
+.hud-onda .linha-onda {
+  display: flex; align-items: baseline; gap: .5em;
+  font-size: clamp(10px, 1.25vmin, 15px);
+  letter-spacing: .3em; text-transform: uppercase; color: var(--osso-3);
+}
+.hud-onda .linha-onda .num {
+  font-size: clamp(18px, 2.6vmin, 34px); font-weight: 700;
+  letter-spacing: .04em; color: var(--osso); font-variant-numeric: tabular-nums;
+}
+.hud-onda .dif {
+  margin-left: auto; font-size: clamp(8px, 1vmin, 12px);
+  letter-spacing: .22em; color: var(--acento-cl);
+}
+.hud-onda .alvo {
+  display: flex; align-items: baseline; gap: .45em; margin-top: .15em;
+  font-size: clamp(9px, 1.1vmin, 13px); letter-spacing: .2em;
+  text-transform: uppercase; color: var(--osso-2);
+}
+.hud-onda .alvo .restam {
+  font-size: clamp(14px, 1.9vmin, 24px); font-weight: 700;
+  color: var(--osso); font-variant-numeric: tabular-nums;
+}
+.hud-onda .trilho {
+  margin-top: 5px; height: 2px; background: rgba(233, 229, 219, .14); overflow: hidden;
+}
+.hud-onda .trilho i {
+  display: block; width: 100%; height: 100%;
+  background: var(--acento); transform-origin: 0 50%; transform: scaleX(0);
+  transition: transform .3s cubic-bezier(.2, .7, .2, 1);
+}
+.hud-onda.quase .alvo .restam { color: var(--acento-cl); }
+
+/* --- Banner de onda --------------------------------------------------------- */
+.hud-banner {
+  position: absolute;
+  left: 50%; top: clamp(80px, 15vh, 190px);
+  transform: translate(-50%, -12px);
+  display: flex; flex-direction: column; align-items: center; gap: .3em;
+  font-family: var(--f-cond); text-align: center;
+  text-shadow: var(--sombra-txt);
+  opacity: 0; pointer-events: none;
+  will-change: opacity, transform;
+}
+.hud-banner .tit {
+  font-size: clamp(24px, 4.6vmin, 62px); font-weight: 700;
+  letter-spacing: .22em; text-transform: uppercase; color: var(--osso);
+  line-height: 1;
+}
+.hud-banner .sub {
+  font-size: clamp(10px, 1.4vmin, 17px); letter-spacing: .32em;
+  text-transform: uppercase; color: var(--acento-cl);
+}
+.hud-banner.mostra { animation: banner-onda 2.6s cubic-bezier(.2, .7, .2, 1) forwards; }
+@keyframes banner-onda {
+  0%   { opacity: 0; transform: translate(-50%, 10px); }
+  12%  { opacity: 1; transform: translate(-50%, -12px); }
+  78%  { opacity: 1; transform: translate(-50%, -12px); }
+  100% { opacity: 0; transform: translate(-50%, -22px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud-banner.mostra { animation-duration: 2.6s; }
+  .hud-onda .trilho i { transition: none; }
+}
+
+/* --- Luneta da sniper ------------------------------------------------------- */
+.hud-luneta {
+  /* RAIO do vidro da óptica — raio, não diâmetro. O valor antigo (46vh) já dava
+     uma abertura de 92% da altura, mas medindo pixel a pixel em 16:9 sobravam
+     apenas 34,5% da tela limpa: é dessa conta que vinha a queixa de "a luneta
+     tapa tudo", porque quase dois terços do quadro eram preto.
+     64vh => diâmetro de 128% da altura. O círculo passa das bordas de cima e de
+     baixo, o preto vira duas cunhas laterais e a área limpa sobe para ~63% da
+     tela em 16:9 — dentro da faixa pedida de 60–70%. (Só o raio não basta para
+     prever a conta: como o círculo é maior que a tela, a área limpa é a
+     interseção círculo∩tela, não πr².)
+     O `min()` com 38vw existe para telas 4:3/5:4 e afins: lá 64vh passa da
+     metade da LARGURA também, a máscara sumiria (medimos 90% de tela limpa num
+     teste com 1280x1024) e a óptica deixaria de parecer óptica. Amarrar ao menor
+     dos dois eixos mantém a luneta redonda e presente em qualquer proporção. */
+  --raio: min(64vh, 38vw);
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .10s linear, visibility .10s;
+  pointer-events: none;
+}
+.hud-luneta.ativa { opacity: 1; visibility: visible; }
+
+/* Máscara: escurecimento por fora do círculo. radial-gradient em vez de
+   border-radius gigante porque o corte fica correto em qualquer proporção.
+   A rampa vai até 3.2vh (antes eram 22px fixos, que em 1080p viravam um corte
+   quase seco) para a borda do vidro ler como sombra de lente e não como recorte
+   de papel-cartão. O fim continua em preto sólido de propósito: a luneta é
+   desenhada por cima do resto do HUD, e um preto translúcido deixava munição,
+   vida e minimapa aparecendo como fantasmas dentro do corpo da óptica. */
+.hud-luneta .mascara {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) calc(var(--raio) - 1px),
+    rgba(0, 0, 0, .22) var(--raio),
+    rgba(0, 0, 0, .78) calc(var(--raio) + 1.4vh),
+    #000 calc(var(--raio) + 3.2vh));
+}
+/* O retículo acompanha o vidro: com o SVG medindo 2×--raio, 100 unidades do
+   viewBox valem exatamente o raio da abertura. Assim anel, hastes e escada
+   continuam alinhados se alguém mexer só no `--raio`. */
+.hud-luneta .reticulo {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: calc(var(--raio) * 2);
+  height: calc(var(--raio) * 2);
+  transform: translate(-50%, -50%);
+}
+/* Traço fino de verdade. `non-scaling-stroke` trava a espessura em px de CSS,
+   então o desenho não engorda quando a tela cresce: antes o anel ia de 9 px em
+   720p a 13,5 px em 1080p e a escada de mil-dot chegava a 7,6 px — barras
+   pretas em cima do alvo. Luneta real tem risco de cabelo.
+   A regra mira `circle`/`path` e NÃO as classes: `vector-effect` não é herdado,
+   então declarar em `.mil` (que é um <g>) não chegava nos traços da escada e ela
+   continuava engordando com a resolução. `stroke-width`, esse sim é herdado, e
+   por isso segue declarado nas classes logo abaixo. */
+.hud-luneta .reticulo circle,
+.hud-luneta .reticulo path {
+  fill: none;
+  stroke: #0b0b0c;
+  vector-effect: non-scaling-stroke;
+}
+/* O anel é a borda do vidro: um pouco mais presente que o resto, mas ainda
+   fino, e translúcido para não brigar com a rampa da máscara logo atrás.
+   Os seletores incluem `.reticulo` porque a regra de cima já tem especificidade
+   (0,2,1) por causa do `circle`/`path`; sem isso o `stroke` do anel perdia. */
+.hud-luneta .reticulo .aro  { stroke: rgba(0, 0, 0, .8); stroke-width: 2; }
+.hud-luneta .reticulo .cruz { stroke-width: 1.5; }
+.hud-luneta .reticulo .fina { stroke-width: 1; }
+.hud-luneta .reticulo .mil  { stroke-width: 1.2; }
+/* Em ADS com luneta a mira normal e o ponto central saem de cena. */
+#hud.com-luneta .hud-mira,
+#hud.com-luneta .hud-ponto { opacity: 0 !important; }
+@media (prefers-reduced-motion: reduce) {
+  .hud-luneta { transition: none; }
+}
+
+/* Linha de contexto da história sob o subtítulo do menu. */
+#tela-menu .subtitulo .lede {
+  display: block;
+  margin-top: .7em;
+  font-size: .78em;
+  letter-spacing: .12em;
+  text-transform: none;
+  color: var(--fumo);
+  max-width: 34ch;
+  line-height: 1.75;
+}
+
+/* --- Arte de capa como fundo de menu / carregamento ------------------------- */
+.fundo-capa {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 42%;
+  background-repeat: no-repeat;
+}
+/* Escurecimento em duas camadas: um gradiente lateral que abre espaço para o
+   texto à esquerda, e uma vinheta geral que assenta a imagem no tom do jogo. */
+.fundo-capa::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(100deg,
+      rgba(8, 9, 11, .94) 0%,
+      rgba(8, 9, 11, .82) 26%,
+      rgba(8, 9, 11, .42) 55%,
+      rgba(8, 9, 11, .30) 100%),
+    radial-gradient(ellipse 88% 84% at 50% 46%,
+      rgba(0, 0, 0, 0) 34%, rgba(0, 0, 0, .58) 82%, rgba(0, 0, 0, .9) 100%);
+}
+/* Com capa, a silhueta em CSS vira só um reforço discreto no rodapé. */
+.tela.tem-capa .fundo-morro { opacity: .35; }
+.tela.tem-capa .fundo-morro.longe { opacity: .18; }
+.tela.tem-capa .fundo-fio { opacity: .5; }

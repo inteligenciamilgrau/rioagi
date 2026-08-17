@@ -1,0 +1,36 @@
+MÚSICA DO JOGO
+==============
+
+Coloque os dois arquivos MP3 nesta pasta, com estes nomes exatos:
+
+  becoemchamas.mp3   -> trilha de AÇÃO   (toca durante o combate)
+  tensaonoar.mp3     -> trilha CALMA     (toca entre as ondas e no menu)
+
+Nada mais precisa ser configurado. O jogo detecta os arquivos sozinho no boot:
+se estiverem aqui, a música entra; se não estiverem, o jogo roda em silêncio
+sem nenhum erro no console.
+
+Como funciona a troca
+---------------------
+A faixa calma toca no menu e nos intervalos entre ondas. Quando uma onda começa
+ou um inimigo te avista, entra a faixa de ação com uma passagem cruzada de
+~1,8 s. Ao limpar o setor, volta para a calma em ~3 s (mais lento de propósito:
+cortar a ação no talo logo depois do último tiro soa abrupto).
+
+As duas faixas tocam em laço contínuo e ficam sincronizadas em posição, então a
+troca cai no mesmo ponto musical em vez de reiniciar do zero.
+
+Volume
+------
+Controlado por Configurações > Áudio > Volume geral, e pelo barramento de música
+do motor de som. Se quiser ajustar só a música em relação ao resto, mude
+`musicVolume` (padrão 0.35) em src/core/Settings.js.
+
+Formato
+-------
+MP3 é o esperado, mas qualquer formato que o navegador toque serve (.ogg, .m4a,
+.wav) — basta manter o nome do arquivo e trocar a extensão em
+src/gameplay/Musica.js, constante FAIXAS.
+
+Duração sugerida: 60 a 180 segundos por faixa. Como o laço é contínuo, faixas
+que começam e terminam parecido emendam melhor.

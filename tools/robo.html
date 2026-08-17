@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>ROBO — banco de provas do inimigo</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #06070a; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { Soldier } from '/src/ai/Soldier.js';
+import { Ragdoll } from '/src/ai/Ragdoll.js';
+
+const q = new URLSearchParams(location.search);
+const LARG = +(q.get('w') || 900), ALT = +(q.get('h') || 900);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(LARG, ALT);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const cena = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+cena.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+cena.environmentIntensity = 0.75;
+
+const camera = new THREE.PerspectiveCamera(32, LARG / ALT, 0.05, 60);
+
+// Luz de estudio: um sol frio + preenchimento quente (o contraste do jogo).
+const sol = new THREE.DirectionalLight(0xd6e6ff, 2.6);
+sol.position.set(-2.6, 4.6, -3.6);   // vem da FRENTE-esquerda (frente = -Z)
+sol.castShadow = true;
+sol.shadow.mapSize.set(1024, 1024);
+sol.shadow.camera.left = -2; sol.shadow.camera.right = 2;
+sol.shadow.camera.top = 3; sol.shadow.camera.bottom = -0.4;
+cena.add(sol);
+const contra = new THREE.DirectionalLight(0xff9a55, 0.9);
+contra.position.set(3.2, 1.8, 3.0);   // contraluz quente (a favela nas costas)
+cena.add(contra);
+const hemi = new THREE.HemisphereLight(0x8fb0d8, 0x2a1d16, 0.5);
+cena.add(hemi);
+
+// Chao neutro para a sombra pousar
+const chao = new THREE.Mesh(
+  new THREE.PlaneGeometry(14, 14),
+  new THREE.MeshStandardMaterial({ color: 0x1a1d22, roughness: 0.95, metalness: 0 }),
+);
+chao.rotation.x = -Math.PI / 2;
+chao.receiveShadow = true;
+cena.add(chao);
+
+const ctx = { scene: cena, camera };
+const soldados = [];
+window.__robo = { THREE, cena, camera, renderer, soldados, ctx, Ragdoll };
+
+/** Cria N robos lado a lado. `vars` escolhe as variantes (padrao 0..n-1). */
+window.__robo.montar = (n, espaco = 1.15, vars = null) => {
+  for (const s of soldados) { s.grupo.removeFromParent(); s.dispose(); }
+  soldados.length = 0;
+  for (let i = 0; i < n; i++) {
+    const s = new Soldier(ctx, { variante: vars ? vars[i] : i });
+    s.grupo.position.set((i - (n - 1) / 2) * espaco, 0, 0);
+    cena.add(s.grupo);
+    soldados.push(s);
+  }
+  return soldados.map((s) => s.triangulos);
+};
+
+/** Camera enquadrando a fila. azim=0 e DE FRENTE (a frente do robo e -Z). */
+window.__robo.olhar = (dist, altura, azim, alvoY = 1.05) => {
+  camera.position.set(Math.sin(azim) * dist, altura, -Math.cos(azim) * dist);
+  camera.lookAt(0, alvoY, 0);
+  camera.updateMatrixWorld(true);
+};
+
+window.__robo.luzAmbiente = (k) => {
+  sol.intensity = 2.6 * k; contra.intensity = 0.9 * k;
+  hemi.intensity = 0.5 * k; cena.environmentIntensity = 0.75 * k;
+};
+
+window.__robo.passo = (dt = 1 / 60, n = 1) => {
+  for (let i = 0; i < n; i++) for (const s of soldados) s.update(dt);
+};
+
+window.__robo.desenhar = () => renderer.render(cena, camera);
+
+window.__robo.pronto = true;
+window.__robo.montar(3);
+window.__robo.olhar(5.4, 1.15, 0);
+renderer.render(cena, camera);
+</script>
+</body>
+</html>

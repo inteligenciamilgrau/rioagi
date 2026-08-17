@@ -1,0 +1,55 @@
+# Build do Vite e publicacao no GitHub Pages.
+#
+# Antes do primeiro uso, uma vez: Settings -> Pages -> Source: GitHub Actions.
+#
+# A `base` do projeto e './' (relativa), entao o mesmo build serve tanto na raiz
+# de um dominio quanto na subpasta /nome-do-repo/ que o Pages usa.
+name: Publicar no GitHub Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+# Permissoes minimas necessarias para publicar.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Uma publicacao por vez; nao cancela a que ja esta rodando.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # `npm ci` respeita o package-lock.json — build reproduzivel.
+      - run: npm ci
+
+      - run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
