@@ -4,6 +4,12 @@
  * Nenhum outro modulo adiciona listener de input.
  */
 
+/* Janela em que o navegador recusa readquirir o pointer lock depois de o
+ * usuario ter saido dele. O Chrome usa ~1 s; 1,3 s da margem sem parecer
+ * travado, e 4 tentativas cobrem ~5 s antes de cair no plano B do clique. */
+const ESPERA_LOCK_MS = 1300;
+const TENTATIVAS_LOCK = 4;
+
 const ACTION_KEYS = {
   forward:  ['KeyW', 'ArrowUp'],
   back:     ['KeyS', 'ArrowDown'],
@@ -110,8 +116,57 @@ export class Input {
     };
   }
 
-  requestLock() { this.canvas.requestPointerLock?.(); }
-  releaseLock() { document.exitPointerLock?.(); }
+  /**
+   * Pede o pointer lock, aguentando a trava de seguranca do navegador.
+   *
+   * O navegador RECUSA readquirir o lock por cerca de 1 s depois de o usuario
+   * ter saido dele — e sair dele e exatamente o que a tecla Esc faz. Ou seja: o
+   * caminho mais comum do jogo (Esc para pausar, clicar em Retomar) cai bem
+   * dentro dessa janela. Em navegador novo `requestPointerLock()` devolve uma
+   * Promise; sem tratamento ela vira `Uncaught (in promise) SecurityError` no
+   * console e, pior, o jogador volta ao jogo com o mouse sem controlar a mira.
+   *
+   * Aqui a recusa vira uma nova tentativa: reagendamos ate `TENTATIVAS_LOCK`
+   * vezes com um intervalo maior que a janela de bloqueio. Se ainda assim nao
+   * pegar, deixamos o proximo clique no canvas resolver — clique e gesto do
+   * usuario, que o navegador sempre aceita.
+   */
+  requestLock() {
+    if (document.pointerLockElement === this.canvas) return;
+    this._cancelarTentativasLock();
+
+    let tentativa = 0;
+    const tentar = () => {
+      if (document.pointerLockElement === this.canvas) return;
+      let p;
+      try {
+        p = this.canvas.requestPointerLock?.();
+      } catch {
+        p = null;                       // navegador antigo: API sincrona que lanca
+      }
+      // `Promise.resolve` normaliza a API antiga (que devolve undefined).
+      Promise.resolve(p).catch(() => {
+        if (++tentativa < TENTATIVAS_LOCK) {
+          this._tLock = setTimeout(tentar, ESPERA_LOCK_MS);
+        } else {
+          // Ultimo recurso: o proximo clique do jogador destrava.
+          this.canvas.addEventListener('click', () => this.requestLock(), { once: true });
+        }
+      });
+    };
+    tentar();
+  }
+
+  _cancelarTentativasLock() {
+    if (this._tLock) { clearTimeout(this._tLock); this._tLock = null; }
+  }
+
+  releaseLock() {
+    // Cancela tentativas pendentes: sem isto, sair para o menu podia ser
+    // seguido por um retry atrasado que rouba o cursor de volta.
+    this._cancelarTentativasLock();
+    document.exitPointerLock?.();
+  }
 
   // --- consultas por acao ---
   isDown(action) {
