@@ -123,15 +123,25 @@ export class Batcher {
     });
   }
 
-  /** Empurra uma instancia. `color` opcional (THREE.Color) usa instanceColor. */
+  /**
+   * Empurra uma instancia. `color` opcional (THREE.Color) usa instanceColor.
+   *
+   * @returns {number} indice da instancia. Para um tipo NAO setorizado esse
+   *   indice e o mesmo do `InstancedMesh` gerado em `build()` (as instancias vao
+   *   todas para um grupo unico, na ordem de chegada), entao da para reescrever
+   *   a matriz de UMA porta depois com `setMatrixAt`. Em tipo setorizado o
+   *   indice nao sobrevive ao fatiamento — nao use para animar.
+   */
   pushInstance(name, matrix, color = null) {
     const inst = this.instances.get(name);
-    if (!inst) { console.warn(`[Batcher] instancia nao declarada: ${name}`); return; }
+    if (!inst) { console.warn(`[Batcher] instancia nao declarada: ${name}`); return -1; }
+    const idx = inst.transforms.length;
     inst.transforms.push(matrix.clone());
     inst.colors.push(color);
     if (inst.sectored) {
       inst.sectorOf.push(this._sectorOf(matrix.elements[12], matrix.elements[14]));
     }
+    return idx;
   }
 
   /** Constroi todos os meshes e adiciona ao grupo. */

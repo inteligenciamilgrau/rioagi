@@ -41,7 +41,7 @@ const erros = [];
 page.on('console', (m) => { if (m.type() === 'error' && !/404/.test(m.text())) { erros.push(m.text()); console.log('[console]', m.text()); } });
 page.on('pageerror', (e) => { erros.push(e.message); console.log('[pageerror]', e.message); });
 
-await page.goto(`http://127.0.0.1:${PORT}/test/world.html`, { waitUntil: 'load', timeout: 180000 });
+await page.goto(`http://127.0.0.1:${PORT}/world.html`, { waitUntil: 'load', timeout: 180000 });
 await page.waitForFunction(() => window.__pronto === true, null, { timeout: 240000 });
 await page.evaluate(() => {
   window.__pausar();

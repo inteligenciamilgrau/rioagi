@@ -526,6 +526,56 @@ canvas#game.critico { filter: saturate(.42) contrast(1.06) brightness(.93); }
   will-change: transform, opacity;
 }
 
+/* --- Dica de ação contextual (abaixo da mira) ------------------------------
+   Escrita por HUD.dicaAcao(), disparada por `player:acao`. Fica logo abaixo do
+   centro: perto o bastante da mira para ser lida sem tirar o olho do alvo,
+   longe o bastante para não disputar espaço com o hitmarker. Mesma gramática do
+   resto do HUD — condensada, caixa alta, o único acento laranja no `kbd`. */
+.hud-acao {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  display: flex;
+  align-items: center;
+  gap: .7em;
+  transform: translate(-50%, 4px);
+  font-family: var(--f-cond);
+  font-size: clamp(11px, 1.45vmin, 17px);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--osso-2);
+  text-shadow: var(--sombra-txt);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .13s linear, transform .13s cubic-bezier(.2, .7, .2, 1);
+  will-change: transform, opacity;
+}
+.hud-acao.mostra {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.hud-acao kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.85em;
+  padding: .16em .32em .2em;
+  font-family: var(--f-cond);
+  font-size: 1.02em;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  color: var(--osso);
+  background: rgba(8, 9, 11, .72);
+  border: 1px solid var(--acento);
+  box-shadow: 0 0 0 1px rgba(8, 9, 11, .6), 0 1px 6px rgba(0, 0, 0, .5);
+}
+/* Com a luneta ativa a tela já é máscara e retículo: mais um widget no meio
+   vira poluição. Mesma regra que apaga a mira comum. */
+#hud.com-luneta .hud-acao { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .hud-acao { transition: opacity .1s linear; transform: translate(-50%, 0); }
+}
+
 /* --------------------------------------------------------------------------
    3. Menu — raiz, telas e componentes
    -------------------------------------------------------------------------- */

@@ -26,6 +26,7 @@ import { Buildings } from './Buildings.js';
 import { Props } from './Props.js';
 import { Vegetation } from './Vegetation.js';
 import { Collision } from './Collision.js';
+import { Portas } from './Portas.js';
 
 const SEED_PADRAO = 20260728;
 const CELULA_NAV = 0.5;
@@ -51,6 +52,7 @@ export class World {
     this.group = new THREE.Group();
     this.group.name = 'favela';
     this.collision = new Collision();
+    this.portas = null;
     this.navGrid = null;
     this._spawns = [];
     this._covers = [];
@@ -99,6 +101,13 @@ export class World {
     const bs = this._bat.build(this.group);
     for (const m of this._bat.meshes) if (m.userData.lodMax !== Infinity) this._meshesLod.push(m);
 
+    /* 6b) portas que abrem. Depende do `build()` (precisa dos InstancedMesh) e
+     * tem de vir ANTES de `collision.build()` nao por dependencia, mas porque a
+     * folha e obstaculo MOVEL: ela nao entra no BVH, entra na lista propria. */
+    this.portas = new Portas(this.ctx, this.collision)
+      .construir(this.buildings.portas, this.buildings.protoPorta)
+      .ligar(this.group);
+
     // 7) colisao
     this.collision.build();
 
@@ -127,6 +136,9 @@ export class World {
       trisColisao: this.collision.triangleCount,
       spawns: this._spawns.length,
       coberturas: this._covers.length,
+      portas: this.portas.lista.length,
+      degrausFuga: this.buildings.statsFuga?.degraus ?? 0,
+      telhadosTratados: this.buildings.statsFuga?.tratadas ?? 0,
       cotaMin: +this.favela.cotaMin.toFixed(2),
       cotaMax: +this.favela.cotaMax.toFixed(2),
       msGeracao: Math.round(t1 - t0),
@@ -455,6 +467,20 @@ export class World {
       if (casa.tunel) liberarObb(casa.x, casa.z, casa.w + 1.0, casa.tunelVao - 0.35, casa.yaw);
       else if (casa.interior) liberarObb(casa.x, casa.z, casa.w - 0.75, casa.d - 0.75, casa.yaw);
     }
+    /* 3b) o VAO DA PORTA tambem e andavel.
+     *
+     * Sem isto o miolo liberado acima ficava cercado por um anel bloqueado de
+     * uma celula, o BFS de conectividade (passo 5) o considerava inalcancavel e
+     * apagava o interior inteiro do navGrid — a IA nunca entrava numa casa e,
+     * pior, a malha discordava da colisao, que agora tem o vao aberto. */
+    for (const pt of this.buildings.ancoras.portas) {
+      if (!pt.casa?.interior) continue;
+      const passos = 7;
+      for (let k = 0; k <= passos; k++) {
+        const t = (k / passos - 0.5) * 2.0;                 // -1 m ate +1 m no eixo da porta
+        liberarObb(pt.x + pt.nx * t, pt.z + pt.nz * t, (pt.w ?? 0.9) * 0.7, (pt.w ?? 0.9) * 0.7, 0);
+      }
+    }
     // 4) muros, postes e volumes de props
     for (const mu of this.favela.muros) bloquearObb(mu.x, mu.z, mu.len, 0.30, mu.yaw, 0.05);
     for (const po of this.favela.postes) bloquearObb(po.x, po.z, 0.4, 0.4, 0, 0.1);
@@ -664,6 +690,9 @@ export class World {
 
   /** LOD por distancia da camera nos lotes de props miudos. */
   update(dt, elapsed) {
+    // as portas giram mesmo com o jogo pausado? nao: `pausable` do World e false,
+    // entao este update roda sempre — o giro usa dt, e um dt de menu nao machuca.
+    this.portas?.update(dt);
     const cam = this.ctx?.camera;
     if (!cam || !this._meshesLod.length) return;
     cam.getWorldPosition(_camPos);
@@ -684,6 +713,8 @@ export class World {
     for (const m of mats) if (m.__cloned) m.dispose();
     this.ctx?.scene?.remove(this.group);
     this.group.clear();
+    this.portas?.dispose();
+    this.portas = null;
     this.collision.dispose();
     if (this._materiais?.isFallback) this._materiais.dispose();
     this._meshesLod.length = 0;

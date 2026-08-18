@@ -135,6 +135,7 @@ export class Menu {
         Derrube os núcleos, suba até ela e devolva a AGI a quem ela pertence.</span></p>
         <nav class="lista-botoes">
           <button class="bt primario" data-acao="jogar"><span>Jogar</span></button>
+          <button class="bt" data-acao="explorar"><span>Explorar o morro</span></button>
           <button class="bt" data-acao="config"><span>Configurações</span></button>
           <button class="bt" data-acao="controles"><span>Controles</span></button>
         </nav>
@@ -351,6 +352,21 @@ export class Menu {
         ctx.player?.destravar?.();
         ctx.input.requestLock();
         ctx.bus.emit('game:resume', {});
+        break;
+      /* Modo passeio: pagina propria (`world.html`), com camera livre em orbita
+       * sobre o morro inteiro. E outro documento, nao outra tela — por isso
+       * navegamos de verdade em vez de trocar de `section`.
+       *
+       * O caminho passa por `BASE_URL` porque o jogo publicado vive numa
+       * subpasta (GitHub Pages de repositorio comum): um `/world.html` cru
+       * funciona em desenvolvimento e da 404 no ar. Mesmo motivo dos assets.
+       *
+       * Solta o ponteiro antes de sair: navegar com o cursor preso deixa o
+       * usuario sem mouse na pagina de destino. */
+      case 'explorar':
+        ctx.input?.releaseLock?.();
+        ctx.audio?.suspend?.();
+        window.location.href = `${import.meta.env.BASE_URL}world.html`;
         break;
       case 'config': this._abrirFolha('folha-config'); break;
       case 'controles': this._abrirFolha('folha-controles'); break;

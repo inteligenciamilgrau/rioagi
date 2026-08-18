@@ -9,6 +9,18 @@
  *   raycast(origin, dir, maxDist)            -> {hit, point, normal, surface, distance}
  *   capsuleSweep(start, end, radius, height) -> {position, grounded, normal, ...}
  *   sphereCast(origin, dir, radius, maxDist) -> {hit, point, normal, surface, distance}
+ *
+ * ## Obstaculos MOVEIS (folha de porta)
+ * O BVH e estatico por construcao — reordena o index no build e nao aceita
+ * geometria que anda. Uma porta que gira no batente precisa de colisao que gire
+ * junto, senao ela abre na tela e continua barrando (que e pior que porta
+ * trancada: o jogador insiste). Por isso a folha vive FORA do BVH, como caixa
+ * orientada consultada a parte pela capsula — ver `addObstaculo` e
+ * `_empurraDaCaixa`. Sao poucas dezenas e so as vizinhas sao testadas.
+ *
+ * O obstaculo movel NAO entra em `raycast`: bala e linha de visada continuam
+ * atravessando a folha. E uma limitacao consciente — mexer no raycast mudaria o
+ * contrato de `faceIndex`/`surface` que FX, AUDIO e a IA consomem.
  * Dono: WORLD.
  */
 import * as THREE from 'three';
@@ -48,6 +60,10 @@ export class Collision {
     this.bvh = null;
     this.faceSurface = null;   // Uint8Array, indice em SUPERFICIES por triangulo
     this.built = false;
+    /* Obstaculos moveis (folhas de porta). `_perto` e recolhido uma vez por
+     * capsuleSweep e reusado pelas 4 iteracoes de depenetracao. */
+    this.obstaculos = [];
+    this._perto = [];
     // buffers reutilizados pelos retornos (a API devolve o mesmo objeto por chamada)
     this._rc = { hit: false, point: new THREE.Vector3(), normal: new THREE.Vector3(), surface: null, distance: 0, faceIndex: -1 };
     this._sc = { hit: false, point: new THREE.Vector3(), normal: new THREE.Vector3(), surface: null, distance: 0 };
@@ -228,6 +244,104 @@ export class Collision {
     return out;
   }
 
+  // -------------------------------------------------- obstaculos moveis
+
+  /**
+   * Registra uma caixa orientada que PODE se mexer depois (folha de porta).
+   * Devolve o proprio objeto: quem o criou escreve `x/y/z/yaw/ativo` a vontade
+   * e a colisao acompanha no quadro seguinte, sem reconstruir nada.
+   *
+   * `ancoraX/ancoraZ` e o ponto FIXO usado na busca por vizinhanca (o batente,
+   * no caso da porta). Usar o centro da caixa nao serviria: ele anda quando a
+   * folha gira, e ai o obstaculo sairia do alcance da consulta bem no meio do
+   * giro.
+   *
+   * @returns {{x,y,z,hw,hh,hd,yaw,ativo,ancoraX,ancoraZ,alcance}}
+   */
+  addObstaculo(o) {
+    const ob = {
+      x: o.x, y: o.y, z: o.z,
+      hw: o.w * 0.5, hh: o.h * 0.5, hd: o.d * 0.5,
+      yaw: o.yaw ?? 0,
+      ativo: o.ativo !== false,
+      ancoraX: o.ancoraX ?? o.x,
+      ancoraZ: o.ancoraZ ?? o.z,
+      // raio que a caixa alcanca a partir da ancora, girando como girar
+      alcance: (o.alcance ?? Math.hypot(o.w, o.d) * 0.5) + 0.05,
+    };
+    this.obstaculos.push(ob);
+    return ob;
+  }
+
+  /** Obstaculos cujo alcance encosta na vizinhanca de (x,z). */
+  _coletarObstaculos(x, z, raio) {
+    const out = this._perto;
+    out.length = 0;
+    const lista = this.obstaculos;
+    for (let i = 0; i < lista.length; i++) {
+      const ob = lista[i];
+      if (!ob.ativo) continue;
+      const dx = ob.ancoraX - x, dz = ob.ancoraZ - z;
+      const r = raio + ob.alcance;
+      if (dx * dx + dz * dz <= r * r) out.push(ob);
+    }
+    return out;
+  }
+
+  /**
+   * Empurra a capsula (segmento VERTICAL de `y0` a `y1`, raio `radius`) para
+   * fora de uma caixa orientada. Devolve a profundidade resolvida (0 = sem toque).
+   *
+   * O segmento e vertical sempre, entao a distancia caixa-capsula se separa por
+   * eixo no referencial da caixa e sai exata, sem iteracao. So empurra na
+   * HORIZONTAL: resolver na vertical faria o jogador subir em cima da folha da
+   * porta como se fosse degrau.
+   */
+  _empurraDaCaixa(pos, radius, height, ob, out) {
+    const c = Math.cos(ob.yaw), s = Math.sin(ob.yaw);
+    const dx = pos.x - ob.x, dz = pos.z - ob.z;
+    const lx = dx * c - dz * s;
+    const lz = dx * s + dz * c;
+    const y0 = pos.y + radius - ob.y, y1 = pos.y + height - radius - ob.y;
+
+    const ax = Math.abs(lx) - ob.hw;
+    const az = Math.abs(lz) - ob.hd;
+    // folga vertical entre o segmento [y0,y1] e a caixa [-hh, hh]
+    const ay = Math.max(y0 - ob.hh, -ob.hh - y1, 0);
+    if (ay > 0) {
+      // ainda pode tocar pela quina, mas so se a distancia total couber no raio
+      const px = Math.max(ax, 0), pz = Math.max(az, 0);
+      if (px * px + pz * pz + ay * ay >= radius * radius) return 0;
+    }
+
+    if (ax > 0 || az > 0) {
+      const px = Math.max(ax, 0), pz = Math.max(az, 0);
+      const d2 = px * px + pz * pz + ay * ay;
+      if (d2 >= radius * radius) return 0;
+      const d = Math.sqrt(d2);
+      // direcao horizontal de saida (a componente vertical e descartada de proposito)
+      let ex = ax > 0 ? Math.sign(lx) * px : 0;
+      let ez = az > 0 ? Math.sign(lz) * pz : 0;
+      if (ex === 0 && ez === 0) ez = Math.sign(lz) || 1;
+      const el = Math.hypot(ex, ez) || 1;
+      ex /= el; ez /= el;
+      const prof = radius - d + 1e-4;
+      out.set(ex * c + ez * s, 0, -ex * s + ez * c);
+      pos.x += out.x * prof; pos.z += out.z * prof;
+      return prof;
+    }
+
+    // eixo do jogador DENTRO da planta da caixa: sai pela face mais proxima
+    const penX = ob.hw + radius - Math.abs(lx);
+    const penZ = ob.hd + radius - Math.abs(lz);
+    let ex = 0, ez = 0, prof;
+    if (penZ <= penX) { ez = Math.sign(lz) || 1; prof = penZ; } else { ex = Math.sign(lx) || 1; prof = penX; }
+    prof += 1e-4;
+    out.set(ex * c + ez * s, 0, -ex * s + ez * c);
+    pos.x += out.x * prof; pos.z += out.z * prof;
+    return prof;
+  }
+
   // ------------------------------------------------------------ capsula
 
   /** Empurra a capsula para fora de tudo que a penetra. Retorna quantos contatos houve. */
@@ -278,6 +392,18 @@ export class Collision {
           return false;
         },
       });
+
+      /* Obstaculos moveis (folha de porta) na mesma iteracao do BVH: se
+       * resolvessem depois, a folha empurraria o jogador para dentro da parede
+       * e o quadro seguinte o devolveria — o classico tremor de canto. */
+      const perto = this._perto;
+      for (let i = 0; i < perto.length; i++) {
+        if (this._empurraDaCaixa(pos, radius, height, perto[i], _push) > 0) {
+          normalOut.add(_push);
+          contatos++;
+          mexeu = true;
+        }
+      }
       if (!mexeu) break;
     }
     if (contatos > 0) normalOut.normalize();
@@ -325,7 +451,13 @@ export class Collision {
     out.normal.set(0, 1, 0); out.groundNormal.set(0, 1, 0); out.surface = 'concreto';
     if (!this.built) { out.position.copy(end); return out; }
 
+    /* Vizinhanca de obstaculos moveis: recolhida UMA vez por varredura e reusada
+     * pelas dezenas de chamadas de `_depenetrate` que vem abaixo. */
     _delta.subVectors(end, start);
+    if (this.obstaculos.length) {
+      this._coletarObstaculos(start.x, start.z, radius + _delta.length() + stepHeight + 0.5);
+    } else this._perto.length = 0;
+
     const dist = _delta.length();
     // sub-passos menores que o raio: capsula nao atravessa parede fina
     const passos = Math.min(12, Math.max(1, Math.ceil(dist / (radius * 0.5))));
@@ -407,6 +539,8 @@ export class Collision {
     this.geometry = null;
     this.bvh = null;
     this.faceSurface = null;
+    this.obstaculos.length = 0;
+    this._perto.length = 0;
     this.built = false;
   }
 }

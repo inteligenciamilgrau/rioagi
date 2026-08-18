@@ -23,6 +23,8 @@ const _state = {};
 const _dmgDir = new THREE.Vector3();
 const _rumoOrigem = new THREE.Vector3();
 const _rumoDir = new THREE.Vector3();
+const _acaoOrigem = new THREE.Vector3();
+const _acaoDir = new THREE.Vector3();
 const _rumoAlturas = [-0.35, 0, 0.45];   // joelho, olho, telhado
 
 const HEALTH_MAX = 100;
@@ -109,6 +111,10 @@ export class Player {
 
     this.enabled = true;
     this._unbind = [];
+
+    /* --- acao de uso (KeyF): porta na mira --- */
+    this._acaoAlvo = null;
+    this._acaoRotulo = null;    // null | 'abrir' | 'fechar'
   }
 
   /** Posição dos pés (contrato para IA e HUD). */
@@ -377,6 +383,12 @@ export class Player {
       ctx.viewCamera.quaternion.copy(ctx.camera.quaternion);
     }
 
+    /* ---------------- acao de uso (porta) ---------------- */
+    // Depois da camera de proposito: a mira do quadro tem de ser a mesma que o
+    // jogador esta vendo, senao a dica pisca um quadro atrasada.
+    this._atualizarAcao(this.enabled && this.alive && !!input?.locked
+      && input.wasPressed('use'));
+
     /* ---------------- viewmodel ---------------- */
     this.viewModel.update(dt, _state);
 
@@ -386,6 +398,55 @@ export class Player {
       this.health = Math.min(this.maxHealth, this.health + REGEN_RATE * dt);
       this.ctx.bus?.emit('player:health', { health: this.health, max: this.maxHealth });
     }
+  }
+
+  /* ================================================================ *
+   * Acao de uso — a tecla que abre porta
+   * ================================================================ */
+
+  /**
+   * Procura a porta que o jogador esta MIRANDO (nao "a mais perto"), publica a
+   * dica na tela e aciona quando a tecla vem.
+   *
+   * Porque mira e nao raio: num comodo com porta de um lado e do outro, o
+   * criterio "mais perto" abre a que esta atras das costas. O `alvoNaMira` do
+   * WORLD faz travessia de raio contra a folha e ainda confere se ha parede no
+   * meio — a folha vive fora do BVH, entao sem essa conferencia daria para
+   * abrir a porta do vizinho atraves da parede.
+   *
+   * A dica so e emitida quando MUDA. Emitir por quadro encheria o EventBus com
+   * 60 eventos/s so para reescrever o mesmo texto no DOM.
+   *
+   * @param {boolean} apertou a tecla de uso foi pressionada neste quadro
+   */
+  _atualizarAcao(apertou) {
+    const portas = this.ctx.world?.portas;
+    if (!portas || !portas.lista.length) {
+      if (this._acaoRotulo !== null) {
+        this._acaoRotulo = null; this._acaoAlvo = null;
+        this.ctx.bus?.emit('player:acao', null);
+      }
+      return;
+    }
+
+    let alvo = null;
+    if (this.alive && this.enabled) {
+      this.getAimOrigin(_acaoOrigem);
+      this.getAimDir(_acaoDir);
+      alvo = portas.alvoNaMira(_acaoOrigem, _acaoDir);
+    }
+
+    if (alvo && apertou) portas.acionar(alvo);
+
+    // `ang` muda durante o giro: le-se depois de acionar, para a dica ja trocar
+    // de "abrir" para "fechar" no mesmo quadro do aperto.
+    const rotulo = alvo ? (alvo.alvo > 0.01 ? 'fechar' : 'abrir') : null;
+    this._acaoAlvo = alvo;
+    if (rotulo === this._acaoRotulo) return;
+    this._acaoRotulo = rotulo;
+    this.ctx.bus?.emit('player:acao', rotulo
+      ? { tecla: 'F', texto: rotulo === 'abrir' ? 'Abrir porta' : 'Fechar porta' }
+      : null);
   }
 
   /* ================================================================ *

@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 
 const PAGES = [
   ['/', 'jogo completo'],
-  ['/test/world.html', 'favela'],
+  ['/world.html', 'favela'],
   ['/test/materials.html', 'materiais'],
   ['/test/player.html', 'armas'],
   ['/test/core.html', 'ceu/luz'],

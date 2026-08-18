@@ -19,6 +19,10 @@ import { surfaceOf } from './gen/materials.js';
 const _m = new THREE.Matrix4();
 const _mHouse = new THREE.Matrix4();
 const _v = new THREE.Vector3();
+const _esc = new THREE.Vector3();
+
+/** Folha de porta: tamanho do prototipo instanciado (ver `_defInstancias`). */
+const PORTA_W = 0.86, PORTA_H = 2.07, PORTA_ESP = 0.045;
 
 export class Buildings {
   constructor({ rng, batcher, collision, terrain }) {
@@ -33,8 +37,12 @@ export class Buildings {
       beirais: [],    // {x,y,z, nx,nz} pontos altos bons para fio/varal
       telhados: [],   // {x,y,z,w,d,yaw,inc,dir} telha de fibrocimento (recebe tijolo/pneu)
       fachadas: [],   // {x,y,z, nx,nz, w,h} paredes de rua (pichaçao)
-      portas: [],     // {x,y,z, nx,nz}
+      portas: [],     // {x,y,z, nx,nz, casa, w,h}
     };
+    /** Folhas de porta que abrem (so casas com interior jogavel). Ver Portas.js. */
+    this.portas = [];
+    /** Tamanho do prototipo instanciado da folha (o Portas escala a partir dele). */
+    this.protoPorta = { w: PORTA_W, h: PORTA_H, esp: PORTA_ESP };
     this._defInstancias();
   }
 
@@ -82,6 +90,26 @@ export class Buildings {
       return g.toNonIndexed();
     }, 'borracha', { uv: 'keep', uvScale: 1.2 });
 
+    /* Folha de porta que ABRE. Duas armadilhas resolvidas aqui:
+     *
+     * 1. O prototipo tem a DOBRADICA na origem (x de 0 a PROTO_W, y de 0 a
+     *    PROTO_H). Assim girar a porta e so mexer no yaw da matriz da instancia
+     *    — sem isso, girar em torno do centro faria a folha atravessar o batente.
+     * 2. O prototipo nasce no tamanho MEDIO real (0,86 x 2,07 m) e nao unitario.
+     *    `defineInstance` projeta a UV no prototipo, entao instancia escalada
+     *    estica a textura; nascendo no tamanho certo a escala fica em ~1,00 e a
+     *    madeira nao vira listra. */
+    for (const [nome, mat] of [['portaMadeira', 'madeira'], ['portaFerro', 'metal_pintado']]) {
+      b.defineInstance(nome, () => {
+        const g = chamferBox(PORTA_W, PORTA_H, PORTA_ESP, 0.008);
+        g.translate(PORTA_W * 0.5, PORTA_H * 0.5, 0);
+        // macaneta: so um cilindro achatado, mas e o que diz "isto abre"
+        const m = chamferBox(0.055, 0.055, 0.12, 0.012);
+        m.translate(PORTA_W - 0.10, PORTA_H * 0.47, 0);
+        return mergeLocal([g, m]);
+      }, mat, { uvScale: 0.7 });
+    }
+
     // caixa de luz / relogio na fachada
     b.defineInstance('relogioLuz', () => {
       const parts = [chamferBox(0.3, 0.4, 0.14, 0.012)];
@@ -99,6 +127,192 @@ export class Buildings {
       if (casa.tunel) this._casaTunel(casa, r);
       else this._casaNormal(casa, r);
     }
+    this.statsFuga = this.degrausDeFuga(casas);
+  }
+
+  // ------------------------------------------------- descida dos telhados
+
+  /**
+   * Degraus de fuga — garante que de TODO telhado se desce.
+   *
+   * ## O que a medicao mostrou (tools/casas.mjs, seed padrao)
+   * Nenhum telhado do mapa era uma prisao absoluta: sempre dava para se atirar
+   * la de cima. Mas em 189 das 293 casas a UNICA saida era um salto de 2,5 a
+   * 5,0 m sem nenhum apoio no meio — 175 delas na faixa de 2,5 a 4 m. Para quem
+   * esta em cima, isso e indistinguivel de estar preso: nao ha nada na tela que
+   * diga que a queda e segura, e o jogador (com razao) nao pula.
+   *
+   * ## A correcao, e por que NAO e uma escada
+   * Uma escadaria externa de 1 m de largura num beco de 1,3 m fecha o beco —
+   * trocariamos um jogador preso em cima por outro preso embaixo. Por isso a
+   * descida e feita de LAJE EM BALANCO: degraus de concreto saindo da parede,
+   * empilhados em zigue-zague, todos ACIMA da altura da cabeca (folga de 1,95 m
+   * medida do chao local). Quem passa no beco passa por baixo sem esbarrar;
+   * quem esta na laje desce de degrau em degrau. E, no morro, essa e literalmente
+   * a gambiarra que existe.
+   *
+   * O grafo abaixo e resolvido no PLANO (alturas de telhado + terreno), nao no
+   * BVH — o BVH so e construido depois. Quem confere no BVH e a auditoria.
+   */
+  degrausDeFuga(casas) {
+    /* 2,2 e nao 2,5 de proposito: este modelo roda no PLANO (cotas de telhado +
+     * campo de altura) e a auditoria confere no BVH, onde entram beiral, mureta,
+     * telha e o terreno decimado a 2 m. A margem de 30 cm e o que impede uma
+     * casa de passar aqui por 5 cm e reprovar la. */
+    const QUEDA_OK = 2.2;      // queda que ja conta como descida controlada
+    const QUEDA_ALVO = 2.0;    // espacamento entre degraus
+    const CLARO = 1.95;        // folga sob o degrau mais baixo (capsula tem 1,80)
+    const ESP = 0.14;          // espessura da laje do degrau
+    const SAIDA = 0.85;        // quanto o degrau avanca da face da parede
+    const PROF = 1.4;          // profundidade do degrau (no eixo de saida)
+
+    const uteis = casas.filter((c) => typeof c.telhadoY === 'number');
+    const stats = { casas: uteis.length, tratadas: 0, degraus: 0, semLugar: 0 };
+    if (!uteis.length) return stats;
+
+    /** Ponto local (lx,lz) de uma casa -> mundo. */
+    const pw = (c, lx, lz) => {
+      const co = Math.cos(c.yaw), si = Math.sin(c.yaw);
+      return [c.x + lx * co + lz * si, c.z - lx * si + lz * co];
+    };
+    const dentroDe = (px, pz, o, margem) => {
+      const co = Math.cos(o.yaw), si = Math.sin(o.yaw);
+      const dx = px - o.x, dz = pz - o.z;
+      const lx = dx * co - dz * si, lz = dx * si + dz * co;
+      return Math.abs(lx) <= o.w * 0.5 + margem && Math.abs(lz) <= o.d * 0.5 + margem;
+    };
+    /** O que ha embaixo do ponto (px,pz): outra casa ou o chao. */
+    const pouso = (px, pz, self) => {
+      let melhor = null;
+      for (const o of uteis) {
+        if (o === self || o.telhadoY >= self.telhadoY - 0.15) continue;
+        if (!dentroDe(px, pz, o, 0.15)) continue;
+        if (!melhor || o.telhadoY > melhor.telhadoY) melhor = o;
+      }
+      if (melhor) return { y: melhor.telhadoY, casa: melhor };
+      return { y: this.terrain.heightAt(px, pz), casa: null };
+    };
+
+    /* Faces da casa: meio de cada parede, normal para fora e tangente ao longo
+     * dela, tudo ja em mundo. A tangente e (nz, -nx) de proposito: e o eixo +X
+     * local de uma caixa girada por `atan2(nx, nz)`, que e como o degrau vai ser
+     * posicionado — assim o deslocamento lateral usa o mesmo eixo da geometria.
+     *
+     * `beiral` = quanto a LAJE passa da parede naquela direcao. Tudo abaixo e
+     * medido a partir da beirada do telhado, nao da parede. */
+    const faces = (c) => {
+      const co = Math.cos(c.yaw), si = Math.sin(c.yaw);
+      const tw = c.telhadoW ?? c.w, td = c.telhadoD ?? c.d;
+      const ox = c.telhadoCx ?? 0, oz = c.telhadoCz ?? 0;
+      return [
+        { l: [0, -c.d * 0.5], n: [0, -1], comp: c.w, beiral: (td * 0.5 - oz) - c.d * 0.5 },
+        { l: [0, c.d * 0.5], n: [0, 1], comp: c.w, beiral: (td * 0.5 + oz) - c.d * 0.5 },
+        { l: [-c.w * 0.5, 0], n: [-1, 0], comp: c.d, beiral: (tw * 0.5 - ox) - c.w * 0.5 },
+        { l: [c.w * 0.5, 0], n: [1, 0], comp: c.d, beiral: (tw * 0.5 + ox) - c.w * 0.5 },
+      ].map((f) => {
+        const [px, pz] = pw(c, f.l[0], f.l[1]);
+        const nx = f.n[0] * co + f.n[1] * si;
+        const nz = -f.n[0] * si + f.n[1] * co;
+        return {
+          x: px, z: pz, nx, nz, tx: nz, tz: -nx, comp: f.comp,
+          beiral: Math.max(0, f.beiral),
+        };
+      });
+    };
+
+    /* --- 1) quem ja desce? relaxacao ate estabilizar --- */
+    const desce = new Map();
+    for (const c of uteis) desce.set(c, false);
+    /* Pousar "logo abaixo da beirada": 0,55 m alem do beiral.
+     *
+     * Antes a sonda ia a 1,0 m da PAREDE, e isso mentia duas vezes — passava por
+     * baixo de beiral grande (dizendo que dava para descer numa laje que na
+     * verdade estava embaixo do proprio telhado) e aceitava telhado vizinho do
+     * outro lado de um beco de 1,2 m, que exige salto e nao queda. A 0,55 m da
+     * beirada, o que a sonda encontra e o que a capsula encontra ao dar um passo
+     * para fora. */
+    const testaDescida = (c) => {
+      for (const f of faces(c)) {
+        const fora = f.beiral + 0.55;
+        for (const t of [-0.3, 0, 0.3]) {
+          const px = f.x + f.nx * fora + f.tx * t * f.comp;
+          const pz = f.z + f.nz * fora + f.tz * t * f.comp;
+          const p = pouso(px, pz, c);
+          const q = c.telhadoY - p.y;
+          if (q > QUEDA_OK || q < -0.45) continue;
+          if (!p.casa || desce.get(p.casa)) return true;
+        }
+      }
+      return false;
+    };
+    for (let iter = 0; iter < 6; iter++) {
+      let mudou = false;
+      for (const c of uteis) {
+        if (desce.get(c)) continue;
+        if (testaDescida(c)) { desce.set(c, true); mudou = true; }
+      }
+      if (!mudou) break;
+    }
+
+    /* --- 2) quem nao desce ganha degraus, do telhado mais BAIXO para o mais
+     * alto: assim uma casa alta pode aproveitar a vizinha que acabou de ser
+     * resolvida, em vez de cada uma construir a sua escada. --- */
+    const pendentes = uteis.filter((c) => !desce.get(c)).sort((a, b) => a.telhadoY - b.telhadoY);
+    for (const c of pendentes) {
+      if (testaDescida(c)) { desce.set(c, true); continue; }
+
+      /* Melhor face: a que tem espaco livre e o pouso mais ALTO (menos degraus).
+       * `saida` sai da BEIRADA do telhado, para o degrau ficar debaixo da queda
+       * e nao debaixo do beiral. */
+      let alvo = null;
+      for (const f of faces(c)) {
+        const saida = f.beiral + SAIDA;
+        let livre = true;
+        for (const dd of [f.beiral + 0.3, saida, saida + PROF * 0.5 + 0.15]) {
+          const px = f.x + f.nx * dd, pz = f.z + f.nz * dd;
+          for (const o of uteis) {
+            if (o === c) continue;
+            if (dentroDe(px, pz, o, 0.1) && o.telhadoY > c.telhadoY - QUEDA_ALVO) { livre = false; break; }
+          }
+          if (!livre) break;
+        }
+        if (!livre) continue;
+        const px = f.x + f.nx * saida, pz = f.z + f.nz * saida;
+        const p = pouso(px, pz, c);
+        if (p.casa && !desce.get(p.casa)) continue;         // pousar em telhado preso nao resolve
+        if (!alvo || p.y > alvo.pouso.y) alvo = { f, pouso: p, saida };
+      }
+      if (!alvo) { stats.semLugar++; continue; }
+
+      const larg = Math.min(1.3, Math.max(0.7, alvo.f.comp * 0.42));
+      const lat = larg * 0.58;
+      const nY = [];
+      let y = alvo.pouso.y + CLARO + ESP;
+      while (y < c.telhadoY - 0.45 && nY.length < 8) { nY.push(y); y += QUEDA_ALVO; }
+      if (!nY.length) { desce.set(c, true); continue; }      // ja cabia sem degrau
+
+      for (let k = 0; k < nY.length; k++) {
+        const desloc = (k % 2 === 0 ? -1 : 1) * lat;
+        const px = alvo.f.x + alvo.f.nx * alvo.saida + alvo.f.tx * desloc;
+        const pz = alvo.f.z + alvo.f.nz * alvo.saida + alvo.f.tz * desloc;
+        const yawD = Math.atan2(alvo.f.nx, alvo.f.nz);
+        const yD = nY[k] - ESP * 0.5;
+        const g = chamferBox(larg, ESP, PROF, 0.02, { taper: 0.02 });
+        _m.makeRotationY(yawD);
+        _m.setPosition(px, yD, pz);
+        this.bat.add(g, _m, 'concreto', { uvScale: 1 });
+        this.col.addBox(px, yD, pz, larg, ESP, PROF, yawD, 'concreto');
+        // mao-francesa: o degrau em balanco precisa parecer que para em pe
+        const gb = chamferBox(larg * 0.28, 0.34, 0.34, 0.015, { taper: 0.5 });
+        _m.makeRotationY(yawD);
+        _m.setPosition(px - alvo.f.nx * (PROF * 0.5 - 0.25), yD - 0.22, pz - alvo.f.nz * (PROF * 0.5 - 0.25));
+        this.bat.add(gb, _m, 'concreto', { uvScale: 1 });
+        stats.degraus++;
+      }
+      desce.set(c, true);
+      stats.tratadas++;
+    }
+    return stats;
   }
 
   // ------------------------------------------------------------- casa comum
@@ -142,7 +356,9 @@ export class Buildings {
       if (!casa.interior || a > 0) {
         this._colBox(casa, cx, y0 + h * 0.5, cz, w, h, d, surfaceOf(an.mat), ya);
       } else {
-        for (const p of paredes) this._colParede(casa, p, y0, h, esp, an.mat);
+        for (const p of paredes) {
+          this._colParede(casa, p, y0, h, esp, an.mat, aberturasPorParede[p.key] || []);
+        }
         this._colBox(casa, cx, y0 + 0.06, cz, w, h * 0.1, d, 'concreto', ya);
       }
 
@@ -257,8 +473,18 @@ export class Buildings {
         arr.push({ u, w: jw, sill, h: jh, tipo: 'janela' });
       }
       if (andar === 0 && ehFrente) {
-        const pu = l.comp * r.range(0.28, 0.72);
         const pw = 0.92;
+        /* Porta OBRIGATORIA quando a casa tem interior jogavel.
+         *
+         * Antes o vao so nascia se o sorteio de `pu` caisse dentro da faixa
+         * util; numa fachada curta (a favela tem casa de 2,8 m de frente) ele
+         * caia fora e a casa ficava sem porta nenhuma — interior sem saida, por
+         * sorteio. Agora `pu` e GRAMPEADO na faixa valida e a porta so e
+         * descartada se a fachada for estreita demais para caber o vao, caso em
+         * que `_garantirPorta` procura outra parede. */
+        const folga = pw / 2 + 0.35;
+        let pu = l.comp * r.range(0.28, 0.72);
+        if (casa.interior) pu = clamp(pu, folga, l.comp - folga);
         // remove janelas que colidem com a porta
         for (let i = arr.length - 1; i >= 0; i--) {
           if (Math.abs(arr[i].u - pu) < (arr[i].w + pw) * 0.5 + 0.2) arr.splice(i, 1);
@@ -269,6 +495,27 @@ export class Buildings {
       }
       arr.sort((a, b) => a.u - b.u);
       out[l.key] = arr;
+    }
+
+    /* Rede de seguranca: casa com interior jogavel NUNCA sai daqui sem porta.
+     * Se a fachada da frente nao comportou o vao, a parede mais larga recebe uma
+     * porta no meio, custe o que custar — sem isso o interior e uma caixa
+     * lacrada, que e exatamente o defeito que estamos consertando. */
+    if (casa.interior && andar === 0) {
+      const temPorta = lados.some((l) => (out[l.key] || []).some((a) => a.tipo === 'porta'));
+      if (!temPorta) {
+        const alvo = lados.slice().sort((a, b) => b.comp - a.comp)[0];
+        const pw = Math.min(0.92, alvo.comp - 0.7);
+        if (pw > 0.7) {
+          const arr = out[alvo.key];
+          const pu = alvo.comp * 0.5;
+          for (let i = arr.length - 1; i >= 0; i--) {
+            if (Math.abs(arr[i].u - pu) < (arr[i].w + pw) * 0.5 + 0.2) arr.splice(i, 1);
+          }
+          arr.push({ u: pu, w: pw, sill: 0, h: r.range(2.0, 2.15), tipo: 'porta' });
+          arr.sort((a, b) => a.u - b.u);
+        }
+      }
     }
     return out;
   }
@@ -334,13 +581,11 @@ export class Buildings {
         _m.scale(new THREE.Vector3(ab.w * 0.94, ab.h * 0.94, 1));
         this.bat.pushInstance('vidro', _m);
       } else {
-        this.ancoras.portas.push({ ...mundo, nx: nrm.x, nz: nrm.z });
-        // porta de madeira/ferro recuada
-        const gp = chamferBox(ab.w - 0.06, ab.h - 0.04, 0.045, 0.008);
-        _m.makeRotationY(yawP);
-        _m.setPosition(px - nx * esp * 0.28, y0 + ab.h * 0.5, pz - nz * esp * 0.28);
-        _m.premultiply(_mHouse);
-        this.bat.add(gp, _m, r.chance(0.5) ? 'madeira' : 'metal_pintado', { uvScale: 0.7 });
+        this.ancoras.portas.push({ ...mundo, nx: nrm.x, nz: nrm.z, casa, w: ab.w, h: ab.h });
+        this._folhaPorta(casa, {
+          ab, a0, a1, y0, h, esp, A, dx, dz, yawP, nx, nz, r,
+        });
+        this._soleira(casa, { ab, y0, h, esp, px, pz, nx, nz, yawP });
       }
     }
     seg(cursor, L, y0, y0 + h, mat);
@@ -353,14 +598,160 @@ export class Buildings {
     }
   }
 
-  _colParede(casa, p, y0, h, esp, mat) {
+  /**
+   * Colisao de uma parede de casa com interior jogavel.
+   *
+   * ## O defeito que esta funcao tinha (causa raiz do "porta fechada")
+   * Ela adicionava UMA caixa macica do comprimento inteiro da parede. A porta e
+   * as janelas existiam so na malha VISUAL — a colisao nao sabia dos vaos. Uma
+   * casa com `interior` virava, na pratica, uma caixa lacrada: dava para ver a
+   * porta e o corredor, e nao dava para atravessar nem para dentro nem para
+   * fora. Medido em `tools/casas.mjs`: 22 de 26 casas com interior prendiam a
+   * capsula (o BFS de caminhada nunca passava da parede).
+   *
+   * Agora a parede vira faixas: um bloco de cada lado do vao e a verga por
+   * cima. O vao da porta fica LIVRE do piso ate a verga — e por onde se entra e
+   * se sai. Janela nao vira buraco: o peitoril continua macico e a colisao dela
+   * fecha por cima do peitoril, senao a casa viraria um queijo por onde se
+   * atravessa parede agachado.
+   */
+  /**
+   * Folha de porta recuada no batente, como instancia com dobradica na origem.
+   *
+   * Publica em `this.portas` o que a casa com interior jogavel precisa para a
+   * folha GIRAR depois (ver `src/world/Portas.js`): eixo, yaw fechado, sentido
+   * de abertura e o indice da instancia. Casa macica ganha a mesma folha, so
+   * que nunca registrada — ali a porta e cenario, porque atras dela ha bloco
+   * solido e abrir nao levaria a lugar nenhum.
+   *
+   * Sentido: a porta abre para DENTRO. Numa viela de 1,3 m uma folha abrindo
+   * para fora entala no muro da frente e vira o proximo motivo de o jogador
+   * ficar preso.
+   */
+  _folhaPorta(casa, o) {
+    const { ab, a0, a1, y0, esp, A, dx, dz, yawP, nx, nz, r } = o;
+    const lw = ab.w - 0.06, lh = ab.h - 0.04;
+    // dobradica num dos batentes (sorteada, so por variedade)
+    const ladoDir = r.chance(0.5);
+    const uH = ladoDir ? a0 : a1;
+    const yawBase = casa.yaw + yawP + (ladoDir ? 0 : Math.PI);
+    /* Interior = +Z local da parede (o normal de fora e -Z local, ver
+     * `_planejarAberturas`). Girar +90 graus leva o +X local para o -Z local,
+     * ou seja, para FORA; entao dentro e -90. Com a dobradica no outro batente
+     * o referencial inteiro gira 180 e o sinal inverte junto. */
+    const sentido = ladoDir ? -1 : 1;
+
+    const rec = esp * 0.28;
+    const eixo = this._pt(casa, A[0] + dx * uH - nx * rec, y0 + 0.02, A[1] + dz * uH - nz * rec);
+    const nome = r.chance(0.5) ? 'portaMadeira' : 'portaFerro';
+
+    _m.makeRotationY(yawBase);
+    _m.setPosition(eixo.x, eixo.y, eixo.z);
+    _m.scale(_esc.set(lw / PORTA_W, lh / PORTA_H, 1));
+    const idx = this.bat.pushInstance(nome, _m);
+
+    if (!casa.interior) return;
+    const nrm = this._dir(casa, nx, nz);
+    this.portas.push({
+      casa, inst: nome, idx,
+      eixo: { x: eixo.x, y: eixo.y, z: eixo.z },
+      yawBase, sentido, w: lw, h: lh, esp: PORTA_ESP,
+      nx: nrm.x, nz: nrm.z,          // normal para FORA, ja em mundo
+    });
+  }
+
+  /**
+   * Soleira — os degraus de concreto na frente da porta.
+   *
+   * ## Porque isto existe (medido em tools/porta.mjs)
+   * A casa assenta em `baseY = min + 0,62*(max-min)` e o terreno so e achatado
+   * de leve sob ela, entao o chao do beco chega a ficar 0,75 m ABAIXO do piso do
+   * terreo. Resultado, na casa #83: com o vao ja aberto na colisao e a porta
+   * escancarada, a capsula ainda era barrada na saida — o degrau de 0,74 m e
+   * quase o dobro do `stepHeight` de 0,40 m e obriga a um mantle so para entrar
+   * em casa. Visualmente a porta ficava pendurada acima do chao.
+   *
+   * Dois ou tres degraus resolvem, e e exatamente o que existe na porta de toda
+   * casa de morro. Sao os mesmos degraus que servem de apoio para descer.
+   */
+  _soleira(casa, o) {
+    const { ab, y0, h, esp, px, pz, nx, nz, yawP } = o;
+    const pisoY = casa.baseY + y0 + (casa.interior ? 0.06 + h * 0.05 : 0.02);
+
+    /* Chao de fora: o PIOR de quatro amostras, nao uma so.
+     *
+     * `Favela._aceitarCasa` achata so 94% da planta, de proposito — e o que faz
+     * o terreno "vazar" nas bordas em vez de a casa virar um bolo numa bandeja.
+     * O efeito colateral e um entalhe logo na saida: na casa #125 o piso interno
+     * esta em 25,10 m, a 10 cm da parede o chao esta em 23,90 e meio metro
+     * adiante volta a 24,76. Uma amostra so pegava os 24,76, o degrau saia curto
+     * e o buraco continuava la. */
+    let chaoY = Infinity;
+    for (const dd of [0.15, 0.45, 0.75, 1.05]) {
+      const p1 = this._pt(casa, px + nx * (esp * 0.5 + dd), 0, pz + nz * (esp * 0.5 + dd));
+      chaoY = Math.min(chaoY, this.terrain.heightAt(p1.x, p1.z));
+    }
+    const queda = pisoY - chaoY;
+    if (queda < 0.28) return;
+
+    const n = Math.min(5, Math.max(1, Math.round(queda / 0.26)));
+    const larg = Math.min(1.35, ab.w + 0.42);
+    const prof = 0.34;
+    const yawM = casa.yaw + yawP;
+    for (let i = 0; i < n; i++) {
+      /* Cada degrau e um bloco CHEIO, do proprio topo ate 0,6 m abaixo do ponto
+       * mais fundo medido: assim ele tapa o entalhe em vez de flutuar sobre ele. */
+      const topo = chaoY + (queda * (i + 1)) / n;
+      const alt = topo - chaoY + 0.6;
+      const fora = esp * 0.5 + prof * (n - i) - prof * 0.5;
+      const p = this._pt(casa, px + nx * fora, 0, pz + nz * fora);
+      const g = chamferBox(larg, alt, prof, 0.02, { taper: 0.01 });
+      _m.makeRotationY(yawM);
+      _m.setPosition(p.x, topo - alt * 0.5, p.z);
+      this.bat.add(g, _m, 'concreto', { uvScale: 1 });
+      this.col.addBox(p.x, topo - alt * 0.5, p.z, larg, alt, prof, yawM, 'concreto');
+    }
+  }
+
+  _colParede(casa, p, y0, h, esp, mat, aberturas = []) {
     const ux = p.B[0] - p.A[0], uz = p.B[1] - p.A[1];
     const L = Math.hypot(ux, uz);
-    const mx = (p.A[0] + p.B[0]) * 0.5, mz = (p.A[1] + p.B[1]) * 0.5;
+    if (L < 0.05) return;
+    const dx = ux / L, dz = uz / L;
     const yawP = Math.atan2(-uz, ux);
-    // converte para mundo
-    const w = this._pt(casa, mx, y0 + h * 0.5, mz);
-    this.col.addBox(w.x, w.y, w.z, L, h, esp, casa.yaw + yawP, surfaceOf(mat));
+    const sup = surfaceOf(mat);
+    const yawM = casa.yaw + yawP;
+
+    /** Faixa de parede entre `a` e `b` (metros ao longo da parede), de ya a yb. */
+    const faixa = (a, b, ya, yb) => {
+      const comp = b - a, alt = yb - ya;
+      if (comp < 0.02 || alt < 0.02) return;
+      const mid = (a + b) * 0.5;
+      const w = this._pt(casa, p.A[0] + dx * mid, (ya + yb) * 0.5, p.A[1] + dz * mid);
+      this.col.addBox(w.x, w.y, w.z, comp, alt, esp, yawM, sup);
+    };
+
+    // so a PORTA abre vao na colisao; janela fecha por cima do peitoril
+    const vaos = aberturas
+      .filter((ab) => ab.tipo === 'porta')
+      .map((ab) => [ab.u - ab.w * 0.5, ab.u + ab.w * 0.5])
+      .sort((a, b) => a[0] - b[0]);
+
+    /* O vao vai do piso ao TETO do andar, e nao ate a verga desenhada.
+     *
+     * Medido em `tools/porta.mjs` (casa #100): o terreno do beco sobe 0,33 m ao
+     * longo da soleira, entao quem estava do lado de fora tinha 1,77 m de pe-
+     * direito sob uma verga desenhada a 2,10 m do piso INTERNO — menos que a
+     * capsula de 1,80 m. A casa ficava lacrada por causa de 3 cm de cabeca.
+     * Com o vao inteiro na colisao a passagem e sempre limpa; a verga continua
+     * na malha visual, e passa 9 cm acima do olho (1,68 m) no pior caso, entao
+     * nao ha nada errado para ver. Acima de `y0 + h` quem fecha e a laje. */
+    let cursor = 0;
+    for (const [a0, a1] of vaos) {
+      faixa(cursor, Math.max(cursor, a0), y0, y0 + h);
+      cursor = Math.max(cursor, a1);
+    }
+    faixa(cursor, L, y0, y0 + h);
   }
 
   // --------------------------------------------------------------- extras
@@ -408,6 +799,17 @@ export class Buildings {
     const w = ult.w + ult.lajeSalto * 2, d = ult.d + ult.lajeSalto * 2;
     const cx = ult.desloc[0], cz = ult.desloc[1];
     const ya = ult.yaw || 0;   // o topo herda o giro do ultimo andar
+
+    /* Cota e PLANTA da superficie que da para pisar la em cima.
+     *
+     * A planta importa tanto quanto a cota: o ultimo andar pode AVANCAR sobre o
+     * terreo (`recuoX` negativo, o puxadinho em balanco) e a laje ainda sobra o
+     * beiral por cima disso. Medindo a descida pela planta do TERREO, o degrau
+     * de fuga nascia debaixo do beiral — o jogador caia da beirada e passava ao
+     * lado dele. Ver `degrausDeFuga`. */
+    casa.telhadoY = casa.baseY + yTopo;
+    casa.telhadoW = w; casa.telhadoD = d;
+    casa.telhadoCx = cx; casa.telhadoCz = cz;
 
     if (casa.topo === 'laje') {
       this.ancoras.lajes.push({ ...this._pt(casa, cx, yTopo, cz), w: w - 0.6, d: d - 0.6, yaw: casa.yaw + ya, casa });
@@ -484,9 +886,26 @@ export class Buildings {
       }
       const pc = this._pt(casa, cx, yTopo + hMax * 0.35, cz);
       this.col.addBox(pc.x, pc.y, pc.z, w + beir, hMax * 0.8, d + beir, casa.yaw + ya, 'concreto');
+      // o telhado inclinado tem colisao de CAIXA: quem anda la em cima anda no topo dela
+      casa.telhadoY = casa.baseY + yTopo + hMax * 0.75;
+      casa.telhadoW = w + beir; casa.telhadoD = d + beir;
     }
   }
 
+  /**
+   * Escadaria externa de laje — a escada de fora que toda casa de morro tem.
+   *
+   * ## O defeito que ela tinha (causa raiz do "subiu e nao desce")
+   * A malha visual tinha os degraus certos, de 17,5 cm. A COLISAO eram duas
+   * caixas: uma de meia altura no comprimento todo e outra de 0,4 x altura em
+   * 55% do comprimento. Ou seja: o jogador via uma escada e esbarrava num
+   * degrau unico de ~1,4 m — cinco vezes o `stepHeight` de 0,40 m e acima do
+   * mantle de 1,30 m. A escada existia so para a camera; ninguem subia nem
+   * descia por ela.
+   *
+   * Agora cada degrau tem a sua caixa (mesma altura da malha), entao a colisao
+   * concorda com o que se ve e a escada e caminho de verdade — nos dois sentidos.
+   */
   _escadaExterna(casa, r) {
     const alt = casa.andares[0].h + 0.25;
     const nDeg = Math.max(6, Math.round(alt / 0.175));
@@ -502,10 +921,12 @@ export class Buildings {
       const z = lz0 + dirZ * (i + 0.5) * passo;
       const g = chamferBox(1.0, y, passo, 0.015);
       this.bat.add(g, this._mat(casa, lx0 - 0.4, y * 0.5, z, 0), 'concreto', { uvScale: 1 });
+      // colisao degrau a degrau: sem isto a escada e so pintura
+      this._colBox(casa, lx0 - 0.4, y * 0.5, z, 1.0, y, passo, 'concreto');
     }
-    const p = this._pt(casa, lx0 - 0.4, alt * 0.5, lz0 + dirZ * compr * 0.5);
-    this.col.addBox(p.x, p.y - alt * 0.25, p.z, 1.0, alt * 0.5, compr, casa.yaw, 'concreto');
-    this.col.addBox(p.x, p.y + alt * 0.2, p.z + 0, 1.0, alt * 0.4, compr * 0.55, casa.yaw, 'concreto');
+    // patamar de chegada, colado na laje: evita o vao de um degrau no topo
+    this._colBox(casa, lx0 - 0.4, alt - 0.1, lz0 + dirZ * (compr + 0.2), 1.0, 0.2, 0.5, 'concreto');
+    casa.temEscada = true;
     // guarda-corpo de cano
     const gg = chamferBox(0.05, 0.9, compr, 0.01);
     this.bat.add(gg, this._mat(casa, lx0 - 0.9, alt * 0.65, lz0 + dirZ * compr * 0.5, 0), 'metal_pintado', { uvScale: 0.5 });

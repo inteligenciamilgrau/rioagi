@@ -743,7 +743,15 @@ export class Favela {
       spec.pilotis = false;
       spec.interior = false;
       spec.tunelVao = vao;
-      spec.tunelAltura = 2.45;
+      /* Pe-direito medido a partir do PISO DO BECO, nao da base da casa.
+       *
+       * `baseY` e o MINIMO do terreno sob toda a planta (que passa fora do
+       * beco), entao um vao fixo de 2,45 m contado dali podia deixar menos de
+       * 1,80 m livres sobre a viela — e a capsula do jogador tem 1,80. Medido
+       * em tools/casas.mjs: a casa-tunel #287 era intransponivel, o jogador
+       * simplesmente nao cabia na passagem que existe para ele passar. */
+      const viaY = this.terrain.heightAt(p[0], p[1]);
+      spec.tunelAltura = clamp(viaY - spec.baseY + 2.35, 2.45, 5.2);
       if (spec.andares.length < 2) {
         spec.andares.push({ ...spec.andares[0], y0: spec.andares[0].h + 0.25, mat: 'reboco_amarelo' });
         spec.alturaTotal = spec.andares[1].y0 + spec.andares[1].h;
@@ -777,10 +785,19 @@ export class Favela {
           const nx = -dz * lado, nz = dx * lado;
           const off = via.w * 0.5 + 0.35;
           const cx = p[0] + nx * off, cz = p[1] + nz * off;
-          // so onde nao ha casa colada
-          const viz = this._casaGrid.query(cx, cz, 8, []);
+          /* So onde nao ha casa colada — e, na frente de casa com INTERIOR
+           * JOGAVEL, nem colada nem perto.
+           *
+           * Medido em tools/porta.mjs (casa #110): um muro de divisa nascia a
+           * 0,5 m da porta e entalava a capsula entre a folha e ele. A casa
+           * tinha vao, tinha porta que abre e tinha soleira, e ainda assim nao
+           * se saia dela. Muro de divisa e detalhe de cenario; porta e saida.
+           * Quando os dois disputam o mesmo metro quadrado, o muro cede. */
+          const viz = this._casaGrid.query(cx, cz, 10, []);
           let livre = true;
-          for (const o of viz) if (pontoEmObb(cx, cz, o, 0.9)) { livre = false; break; }
+          for (const o of viz) {
+            if (pontoEmObb(cx, cz, o, o.interior ? 2.6 : 0.9)) { livre = false; break; }
+          }
           if (livre && r.chance(0.55)) {
             const comp = r.range(3.5, 9.5);
             const hLocal = t.heightAt(cx, cz);

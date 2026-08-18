@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Explorar o morro — Operação RIO-AGI</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <style>
+    :root { --tinta: #e9e5db; --fraco: #9aa0a8; --fundo: #0b0c0e; --destaque: #e8873c; }
+    html, body { margin: 0; height: 100%; background: var(--fundo); overflow: hidden; }
+    canvas { display: block; }
+
+    /* Barra de titulo: identifica a pagina e devolve o caminho para o jogo.
+       Sem isto a pessoa entra e nao sabe como voltar. */
+    #barra {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 6;
+      display: flex; align-items: center; gap: 16px;
+      padding: 12px clamp(14px, 3vw, 32px);
+      font: 500 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .18em; text-transform: uppercase; color: var(--tinta);
+      background: linear-gradient(180deg, rgba(6,7,10,.82) 0%, rgba(6,7,10,0) 100%);
+      pointer-events: none;
+    }
+    #barra a { pointer-events: auto; color: var(--fraco); text-decoration: none; border-bottom: 1px solid transparent; }
+    #barra a:hover, #barra a:focus-visible { color: var(--tinta); border-bottom-color: var(--destaque); }
+    #barra .titulo { color: var(--tinta); }
+    #barra .titulo b { color: var(--destaque); font-weight: 500; }
+    #barra .espaco { flex: 1; }
+    #bt-som {
+      pointer-events: auto; cursor: pointer;
+      font: inherit; letter-spacing: .18em; text-transform: uppercase;
+      color: var(--fraco); background: transparent;
+      border: 1px solid rgba(255,255,255,.16); border-radius: 3px;
+      padding: 5px 10px;
+    }
+    #bt-som:hover, #bt-som:focus-visible { color: var(--tinta); border-color: var(--destaque); }
+    #bt-som.mudo { color: #6b6f76; text-decoration: line-through; }
+
+    #ajuda {
+      position: fixed; bottom: 12px; left: clamp(14px, 3vw, 32px); z-index: 5;
+      font: 11px/1.7 ui-monospace, monospace; color: var(--fraco);
+      background: rgba(10,11,13,.55); padding: 8px 12px; border-radius: 5px;
+      pointer-events: none;
+    }
+    #ajuda kbd {
+      color: var(--tinta); background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.14); border-radius: 3px;
+      padding: 1px 5px; font: inherit;
+    }
+
+    /* Painel tecnico: existe, mas fica FORA do caminho de quem so quer passear.
+       F3 e a mesma tecla de depuracao usada dentro do jogo — uma convencao so. */
+    #tec {
+      position: fixed; top: 52px; left: clamp(14px, 3vw, 32px); z-index: 5;
+      font: 12px/1.55 ui-monospace, monospace; color: var(--tinta);
+      background: rgba(10,11,13,.72); border: 1px solid #2a2d33;
+      padding: 10px 12px; border-radius: 6px; min-width: 260px; white-space: pre;
+      pointer-events: none; display: none;
+    }
+    #carregando {
+      position: fixed; inset: 0; z-index: 8; display: grid; place-items: center;
+      background: var(--fundo); color: var(--fraco);
+      font: 13px/1.6 ui-monospace, monospace; letter-spacing: .22em; text-transform: uppercase;
+      transition: opacity .45s ease-out;
+    }
+    #carregando.sai { opacity: 0; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div id="carregando">Montando o morro…</div>
+
+  <div id="barra">
+    <span class="titulo">Explorar o <b>morro</b></span>
+    <span class="espaco"></span>
+    <button id="bt-som" type="button" title="Silenciar / religar a música">♪ música</button>
+    <a href="./">← Voltar ao jogo</a>
+  </div>
+
+  <div id="ajuda">
+    <kbd>arrastar</kbd> orbitar &nbsp;·&nbsp; <kbd>roda</kbd> aproximar &nbsp;·&nbsp;
+    <kbd>1</kbd>–<kbd>6</kbd> pontos de vista &nbsp;·&nbsp; <kbd>F3</kbd> dados técnicos
+  </div>
+
+  <div id="tec">gerando…</div>
+
+  <script type="module">
+    /* Pagina "Explorar o morro".
+     *
+     * Nasceu como `test/world.html`, um banco de teste do modulo WORLD que
+     * montava a propria luz porque o modulo CORE ainda nao existia. Agora e
+     * funcionalidade do jogo, entao usa o CEU E A LUZ DE VERDADE — o improviso
+     * anterior tinha um azul frio que justamente acabou de ser corrigido no
+     * jogo, e mostrar aqui a versao velha seria exibir o defeito como recurso.
+     *
+     * O PostFX (bloom, GTAO, TAA) fica de fora de proposito: ele exige `bus` e
+     * `engine`, ou seja, o laco completo do jogo. O ganho aqui e a cor certa do
+     * ceu e da luz, que e o que muda a leitura da cena.
+     *
+     * Os ganchos `window.__*` no fim do arquivo sao usados pelas ferramentas de
+     * diagnostico em `tools/`. Nao remova sem atualizar quem depende deles.
+     */
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { World } from './src/world/World.js';
+    import { Sky } from './src/core/Sky.js';
+    import { Lighting } from './src/core/Lighting.js';
+    import { Settings } from './src/core/Settings.js';
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 900);
+    camera.position.set(96, 74, 118);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 12, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.maxDistance = 420;
+
+    const settings = new Settings(null);
+
+    /* Sky e Lighting leem `scene`, `camera`, `renderer`, `settings` e o par
+     * `viewScene`/`viewCamera` (que no jogo e a cena do viewmodel). Aqui nao ha
+     * viewmodel, entao apontam para os mesmos objetos — inofensivo, e evita
+     * ramo nulo dentro deles. */
+    const ctx = { scene, camera, renderer, settings, viewScene: scene, viewCamera: camera };
+
+    const sky = new Sky(ctx);
+    ctx.sky = sky;
+    await sky.init();
+
+    const lighting = new Lighting(ctx);
+    await lighting.init();
+
+    const world = new World(ctx, {
+      seed: Number(new URLSearchParams(location.search).get('seed')) || 20260728,
+    });
+    await world.init();
+
+    // --- sobreposicoes de depuracao (desligadas; F3 revela o painel) ---
+    const overlays = new THREE.Group();
+    scene.add(overlays);
+
+    function fazNavGrid() {
+      const ng = world.navGrid;
+      const pts = [];
+      for (let j = 0; j < ng.height; j += 1) {
+        for (let i = 0; i < ng.width; i += 1) {
+          if (!ng.isWalkable(i, j)) continue;
+          pts.push(ng.origin.x + (i + .5) * ng.cellSize, ng.heightData[j * ng.width + i] + 0.06,
+            ng.origin.z + (j + .5) * ng.cellSize);
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+      const p = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x33ff88, size: 0.24, sizeAttenuation: true }));
+      p.visible = false;
+      overlays.add(p);
+      return p;
+    }
+    function fazPontos(lista, cor, alturaOff) {
+      const pts = [];
+      for (const c of lista) pts.push(c.position.x, c.position.y + alturaOff, c.position.z);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+      const p = new THREE.Points(g, new THREE.PointsMaterial({ color: cor, size: 1.1, sizeAttenuation: true }));
+      p.visible = false;
+      overlays.add(p);
+      return p;
+    }
+    const ovNav = fazNavGrid();
+    const ovCob = fazPontos(world.getCoverPoints(), 0xff5533, 0.9);
+    const ovSpn = fazPontos(world.getSpawnPoints(), 0x33aaff, 1.4);
+
+    // --- pontos de vista ---
+    const spawns = world.getSpawnPoints();
+    const CAMS = {
+      aerea: [[0, 150, 150], [0, 14, -6], 55],
+      encosta: [[86, 58, 96], [-6, 22, -14], 46],
+      rasante: [[62, 30, 66], [-10, 16, -6], 40],
+    };
+    function poseCam(p, t, fov) {
+      controls.enabled = false;
+      camera.position.set(p[0], p[1], p[2]);
+      controls.target.set(t[0], t[1], t[2]);
+      camera.fov = fov ?? camera.fov;
+      camera.updateProjectionMatrix();
+      camera.lookAt(t[0], t[1], t[2]);
+      controls.enabled = true;
+      controls.update();
+    }
+
+    // --- ganchos para as ferramentas de diagnostico (tools/) ---
+    window.__world = world;
+    window.__three = { scene, camera, renderer, controls };
+    window.__pose = (p, t, fov) => { poseCam(p, t, fov); render(); render(); };
+    window.__wire = (on) => { world.setWireframe(!!on); render(); };
+    window.__overlay = (qual, on) => {
+      ({ nav: ovNav, cobertura: ovCob, spawn: ovSpn })[qual].visible = !!on; render();
+    };
+    window.__stats = () => ({
+      drawCalls: renderer.info.render.calls,
+      triangulos: renderer.info.render.triangles,
+      geometrias: renderer.info.memory.geometries,
+      texturas: renderer.info.memory.textures,
+      programas: renderer.info.programs?.length ?? 0,
+      mundo: world.stats,
+      navAndavel: world.navGrid.walkableCount,
+    });
+    /** Poe a camera na altura do olho num ponto andavel, olhando numa direcao. */
+    window.__olho = (x, z, yaw, alturaOlho = 1.68, alcance = 40) => {
+      const y = world.collision.groundAt(x, z, 200) + alturaOlho;
+      poseCam([x, y, z], [x + Math.sin(yaw) * alcance, y - alcance * 0.16, z + Math.cos(yaw) * alcance], 75);
+      render(); render();
+    };
+    window.__spawnCam = (i, yaw = 0) => {
+      const s = spawns[i % spawns.length];
+      window.__olho(s.position.x, s.position.z, yaw !== null ? yaw : s.yaw);
+      return { x: s.position.x, z: s.position.z, y: s.position.y };
+    };
+
+    // --- painel tecnico ---
+    const tec = document.getElementById('tec');
+    function atualizaTec() {
+      if (tec.style.display === 'none') return;
+      const s = world.stats;
+      tec.textContent =
+        `DRAW CALLS   ${renderer.info.render.calls}\n` +
+        `TRIANGULOS   ${(renderer.info.render.triangles / 1000).toFixed(1)}k\n` +
+        `objetos      ${s.objetosCena}  (merge ${s.meshesMerged} / inst ${s.meshesInstanced})\n` +
+        `geometrias   ${renderer.info.memory.geometries}   texturas ${renderer.info.memory.textures}\n` +
+        `─────────────────────────\n` +
+        `seed         ${s.seed}   gerado em ${s.msGeracao} ms\n` +
+        `casas        ${s.casas}     vias ${s.vias}    muros ${s.muros}\n` +
+        `postes       ${s.postes}     fios ${s.fios}    varais ${s.varais}\n` +
+        `arvores      ${s.arvores}    capim ${s.capim}\n` +
+        `desnivel     ${s.cotaMin} .. ${s.cotaMax} m\n` +
+        `colisao      ${(s.trisColisao / 1000).toFixed(1)}k tris\n` +
+        `spawns ${s.spawns}   coberturas ${s.coberturas}\n` +
+        `cam ${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}\n` +
+        `─────────────────────────\n` +
+        `W wireframe · N navegação · C cobertura · S spawns`;
+    }
+
+    let wire = false;
+    addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      if (e.key === 'F3') {
+        e.preventDefault();
+        tec.style.display = tec.style.display === 'none' ? 'block' : 'none';
+        atualizaTec();
+        return;
+      }
+      // Atalhos tecnicos so respondem com o painel aberto: quem esta passeando
+      // nao pode ligar wireframe sem querer e achar que o jogo quebrou.
+      if (tec.style.display === 'block') {
+        if (k === 'w') { wire = !wire; world.setWireframe(wire); }
+        if (k === 'n') ovNav.visible = !ovNav.visible;
+        if (k === 'c') ovCob.visible = !ovCob.visible;
+        if (k === 's') ovSpn.visible = !ovSpn.visible;
+      }
+      if (k === '1') poseCam(...CAMS.aerea);
+      if (k === '2') poseCam(...CAMS.encosta);
+      if (k === '3') poseCam(...CAMS.rasante);
+      if (k === '4') window.__spawnCam(0);
+      if (k === '5') window.__spawnCam(4);
+      if (k === '6') window.__spawnCam(9);
+    });
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    function render() {
+      const dt = 1 / 60;
+      sky.update(dt);
+      lighting.update(dt);
+      world.update(dt, performance.now() / 1000);
+      renderer.render(scene, camera);
+      atualizaTec();
+    }
+    let raf = 0, rodando = true;
+    function loop() {
+      raf = requestAnimationFrame(loop);
+      controls.update();
+      render();
+    }
+    /* O Playwright roda em SwiftShader (software): com o laco ativo, cada
+     * captura briga com o quadro seguinte e estoura o timeout. Estes ganchos
+     * congelam o laco e deixam so os renders explicitos de __pose/__wire. */
+    window.__pausar = () => { rodando = false; cancelAnimationFrame(raf); };
+    window.__retomar = () => { if (!rodando) { rodando = true; loop(); } };
+
+    /* ---------------------------------------------------------------- *
+     * Musica: a mesma faixa calma da abertura e dos menus.
+     * ---------------------------------------------------------------- *
+     * Esta e OUTRA PAGINA, entao o audio do jogo morreu na navegacao — nao ha
+     * como "continuar" a faixa, so recomecar. E aqui esbarra na politica de
+     * autoplay: o clique que trouxe a pessoa ate aqui aconteceu no documento
+     * ANTERIOR e nao vale como gesto neste. Ou seja, `play()` pode ser negado.
+     *
+     * Por isso a tentativa e otimista com rede: se o navegador recusar,
+     * enganchamos no primeiro gesto REAL desta pagina. Como a pagina e um
+     * visualizador em orbita, o primeiro gesto e quase sempre arrastar o mouse
+     * — a musica entra sozinha, sem pedir nada a ninguem.
+     *
+     * O volume respeita o que o jogador configurou no jogo (mesmo localStorage,
+     * lido pelo Settings). Master e musica sao multiplicados UMA vez: aplicar o
+     * de musica duas vezes ja foi bug aqui e deixa tudo quase inaudivel. */
+    const musica = new Audio(`${import.meta.env.BASE_URL}audio/musica/tensaonoar.mp3`);
+    musica.loop = true;
+    musica.preload = 'auto';
+    const volumeAlvo = () =>
+      Math.max(0, Math.min(1, (settings.masterVolume ?? 0.8) * (settings.musicVolume ?? 0.35)));
+    musica.volume = volumeAlvo();
+
+    const btSom = document.getElementById('bt-som');
+    let mudo = false;
+
+    function tentarTocar() {
+      if (mudo) return;
+      musica.play().catch(() => {
+        // Negado: espera um gesto de verdade nesta pagina e tenta de novo.
+        const naPrimeiraInteracao = () => {
+          document.removeEventListener('pointerdown', naPrimeiraInteracao);
+          document.removeEventListener('keydown', naPrimeiraInteracao);
+          if (!mudo) musica.play().catch(() => { /* desistimos em silencio */ });
+        };
+        document.addEventListener('pointerdown', naPrimeiraInteracao, { once: true });
+        document.addEventListener('keydown', naPrimeiraInteracao, { once: true });
+      });
+    }
+
+    btSom.addEventListener('click', () => {
+      mudo = !mudo;
+      btSom.classList.toggle('mudo', mudo);
+      if (mudo) {
+        musica.pause();
+      } else {
+        musica.volume = volumeAlvo();
+        // Clique e gesto valido: aqui o play sempre passa.
+        musica.play().catch(() => {});
+      }
+    });
+
+    // Sair da pagina para o jogo: para a faixa para nao brigar com a do menu.
+    addEventListener('pagehide', () => { musica.pause(); });
+
+    /* Gancho de diagnostico, na mesma familia dos `window.__*` acima: sem ele
+     * nao da para PROVAR que a musica esta tocando. `mediaSession` so reporta
+     * "playing" se a pagina registrar metadados, entao serve de nada aqui — e
+     * um teste que olha para ele passa sem medir coisa alguma. */
+    window.__musica = musica;
+
+    tentarTocar();
+
+    poseCam(...CAMS.aerea);
+    loop();
+    document.getElementById('carregando').classList.add('sai');
+    window.__pronto = true;
+    console.log('[world] pronto', world.stats);
+  </script>
+</body>
+</html>

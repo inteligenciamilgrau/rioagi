@@ -144,6 +144,10 @@ export class HUD {
     this.elOndaDif = $('.hud-onda .dif');
     this.elOndaRestam = $('.hud-onda .restam');
     this.elOndaBarra = $('.hud-onda .trilho i');
+    this.elAcao = $('.hud-acao');
+    this.elAcaoTecla = $('.hud-acao kbd');
+    this.elAcaoTexto = $('.hud-acao .rot');
+    this._acaoAtiva = false;
     this.elBanner = $('.hud-banner');
     this.elBannerTit = $('.hud-banner .tit');
     this.elBannerSub = $('.hud-banner .sub');
@@ -270,6 +274,11 @@ export class HUD {
       `<path d="M-10-5V5M-20-5V5M-30-5V5M-40-5V5"/>` +
       `</g></svg></div>` +
 
+      // Dica de acao: aparece logo abaixo da mira quando ha porta no alcance.
+      // Sem ela ninguem descobre que a tecla existe — e a tecla e o que tira o
+      // jogador de dentro de casa.
+      `<div class="hud-acao"><kbd>F</kbd><span class="rot">Abrir porta</span></div>` +
+
       `<div class="hud-banner"><span class="tit"></span><span class="sub"></span></div>` +
 
       `<div class="hud-fps"></div>` +
@@ -354,6 +363,7 @@ export class HUD {
     on('player:damaged', (p) => this._onDamaged(p));
     on('player:health', (p) => { if (typeof p?.health === 'number') this.vida = p.health; });
     on('onda:estado', (p) => this.setOnda(p));
+    on('player:acao', (p) => this.dicaAcao(p));
     on('player:died', () => this._onDied());
     on('quality:changed', ({ preset }) => {
       this.aviso(`qualidade: ${preset?.name ?? '—'}`);
@@ -584,6 +594,34 @@ export class HUD {
     this._avisoT = setTimeout(() => { this.elAviso.style.opacity = '0'; }, ms);
   }
 
+  /**
+   * Dica de acao contextual, abaixo da mira. `p = null` esconde.
+   *
+   * Vem do PLAYER pelo evento `player:acao`, e só quando o alvo MUDA — não há
+   * escrita de DOM por quadro aqui. O elemento fica sempre montado (só a classe
+   * muda), senão a primeira aparição pagaria layout no meio do tiroteio, que é
+   * o mesmo motivo pelo qual a camada de sangue é pré-rasterizada no boot.
+   *
+   * @param {{tecla:string, texto:string}|null} p
+   */
+  dicaAcao(p) {
+    if (!this.elAcao) return;
+    const ativa = !!p;
+    if (ativa) {
+      if (p.tecla && p.tecla !== this._acaoTecla) {
+        this._acaoTecla = p.tecla;
+        this.elAcaoTecla.textContent = p.tecla;
+      }
+      if (p.texto && p.texto !== this._acaoTexto) {
+        this._acaoTexto = p.texto;
+        this.elAcaoTexto.textContent = p.texto;
+      }
+    }
+    if (ativa === this._acaoAtiva) return;
+    this._acaoAtiva = ativa;
+    this.elAcao.classList.toggle('mostra', ativa);
+  }
+
   /** `tipo`: 'normal' | 'headshot' | 'morte'. */
   hitmarker(tipo = 'normal') {
     const el = this.elHit;
@@ -627,6 +665,7 @@ export class HUD {
     this._flash = 0;
     this.elMun.classList.remove('vazio', 'recarregando');
     this._recarregando = false;
+    this.dicaAcao(null);
   }
 
   setQuality() { this._aplicarPreferencias(); }

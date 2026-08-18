@@ -1,5 +1,5 @@
 /**
- * Tira fotos do banco de teste do WORLD (test/world.html) com Playwright.
+ * Tira fotos do banco de teste do WORLD (world.html) com Playwright.
  * Uso: node tools/shot-world.mjs [porta] [pasta]
  * Nao faz parte do jogo — e ferramenta de verificacao do agente WORLD.
  */
@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 
 const PORTA = process.argv[2] || '5199';
 const PASTA = process.argv[3] || 'shots';
-const URL = `http://127.0.0.1:${PORTA}/test/world.html`;
+const URL = `http://127.0.0.1:${PORTA}/world.html`;
 
 mkdirSync(PASTA, { recursive: true });
 

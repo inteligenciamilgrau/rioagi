@@ -1373,6 +1373,82 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * Porta de casa girando no batente. `fase`: 'abre' | 'fecha' | 'bate'.
+   *
+   * Timbre: trinco (banda estreita curtissima) + rangido da dobradica (serra
+   * varrendo em frequencia, com Q alto — e o que soa "ferrugem" e nao "sino") +
+   * raspar da folha no batente. Nada de amostra: mesma cozinha do resto.
+   *
+   * Prioridade `contrato`: e retorno direto de uma acao do jogador (tecla F).
+   * Se a porta abre na tela e nao se ouve nada, o jogador aperta de novo e
+   * fecha o que acabou de abrir — foi por isso que este som existe. Alcance
+   * curto (18 m): porta de vizinho abrindo longe nao e informacao de combate.
+   */
+  porta(fase = 'abre', pos = null) {
+    if (!this.ativo) return;
+    const t0 = this.actx.currentTime + 0.001;
+    const ent = this._voz(pos, {
+      cauda: 0.22, beco: 0.16, ganho: 0.7, vida: 0.9,
+      prio: PRIO.contrato, alcance: 18,
+    });
+    if (!ent) return;
+
+    const v = Math.pow(2, (Math.random() - 0.5) * 0.4);
+
+    if (fase === 'bate') {
+      // folha encostando no batente: madeira seca, sem rangido
+      const s = this._ruido(t0, 0.10, 1.0);
+      const bp = this._filtro('bandpass', 620 * v, 2.2);
+      const g = this._ganho(0);
+      this._env(g.gain, t0, 0.85, 0.001, 0.09);
+      s.connect(bp).connect(g).connect(ent);
+      const o = this._osc('sine', t0, 150 * v, 88 * v, 0.13);
+      const g2 = this._ganho(0);
+      this._env(g2.gain, t0, 0.7, 0.002, 0.12);
+      o.connect(g2).connect(ent);
+      return;
+    }
+
+    // 1. trinco/maçaneta
+    {
+      const s = this._ruido(t0, 0.05, 1.0);
+      const bp = this._filtro('bandpass', 3600 * v, 9);
+      const g = this._ganho(0);
+      this._env(g.gain, t0, 0.75, 0.0008, 0.03);
+      s.connect(bp).connect(g).connect(ent);
+    }
+    // 2. rangido da dobradica: varredura lenta, Q alto
+    {
+      const td = t0 + 0.06;
+      const dur = 0.42;
+      const s = this._ruido(td, dur + 0.05, 0.35);
+      const bp = this._filtro('bandpass', 900 * v, 14);
+      const sobe = fase === 'abre';
+      bp.frequency.setValueAtTime((sobe ? 780 : 1500) * v, td);
+      bp.frequency.exponentialRampToValueAtTime((sobe ? 1600 : 760) * v, td + dur);
+      const g = this._ganho(0);
+      this._env(g.gain, td, 0.32, 0.06, dur, 1.4);
+      s.connect(bp).connect(g).connect(ent);
+      // segundo formante uma quinta acima: e o que tira o som de "assobio"
+      const bp2 = this._filtro('bandpass', 1400 * v, 11);
+      bp2.frequency.setValueAtTime((sobe ? 1170 : 2250) * v, td);
+      bp2.frequency.exponentialRampToValueAtTime((sobe ? 2400 : 1140) * v, td + dur);
+      const g2 = this._ganho(0);
+      this._env(g2.gain, td, 0.16, 0.08, dur, 1.4);
+      s.connect(bp2).connect(g2).connect(ent);
+    }
+    // 3. peso da folha raspando o piso
+    {
+      const td = t0 + 0.04;
+      const s = this._ruido(td, 0.30, 0.5);
+      const lp = this._filtro('lowpass', 420, 0.8);
+      const g = this._ganho(0);
+      this._env(g.gain, td, 0.22, 0.05, 0.26);
+      s.connect(lp).connect(g).connect(ent);
+    }
+  }
+
   /** Gatilho seco (pente vazio). */
   cliqueSeco() {
     if (!this.ativo) return;
