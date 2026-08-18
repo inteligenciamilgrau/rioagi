@@ -1450,3 +1450,19 @@ input[type='range']::-moz-range-thumb {
   padding: 0 4px;
   letter-spacing: 0;
 }
+
+/* Item que a tecla de usar consumiria AGORA. Sem esta marca a mochila é uma
+   caixa preta: três números e nenhuma pista de qual deles o E gasta. */
+.hud-mochila .item.alvo {
+  opacity: 1;
+}
+.hud-mochila .item.alvo i {
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .55), 0 0 10px currentColor;
+  background: currentColor;
+}
+.hud-mochila .item.alvo .n { color: currentColor; }
+
+/* Nada é utilizável agora: a dica continua na tela (é ela que explica o
+   porquê), mas apagada, para não prometer ação que não vai acontecer. */
+.hud-mochila .dica.inativa { opacity: .4; }
+.hud-mochila .dica span { letter-spacing: .2em; }

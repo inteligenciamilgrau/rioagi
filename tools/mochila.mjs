@@ -80,6 +80,43 @@ console.log('\n=== teto por tipo ===');
 checa(`guarda no maximo ${r.cap} kits`, r.cheia.kit === r.cap, `kit=${r.cheia.kit}`);
 checa('o excedente FICA no chao', r.cheia.delta === 2, `delta ${r.cheia.delta} (5 criados - 3 guardados)`);
 
+
+// --- o jogador consegue VER o que sera usado? ---
+const vis = await p.evaluate(async () => {
+  const ctx = window.__game.ctx, mo = ctx.mochila, jog = ctx.player, hud = ctx.hud;
+  ctx.state = 'jogando';
+  mo.reset(); jog.health = jog.maxHealth;
+  mo.guardar('kit');
+  for (let i = 0; i < 30; i++) hud.update(1/60);
+  const comVidaCheia = {
+    alvo: mo.oQueUsaria(),
+    dica: document.querySelector('.hud-mochila .dica span')?.textContent,
+    inativa: document.querySelector('.hud-mochila .dica')?.classList.contains('inativa'),
+    marcado: document.querySelector('.hud-mochila .item.alvo')?.dataset.tipo ?? null,
+  };
+  const msgCheia = mo._motivoDaRecusa();
+
+  jog.health = 30;
+  for (let i = 0; i < 30; i++) hud.update(1/60);
+  const machucado = {
+    alvo: mo.oQueUsaria(),
+    dica: document.querySelector('.hud-mochila .dica span')?.textContent,
+    inativa: document.querySelector('.hud-mochila .dica')?.classList.contains('inativa'),
+    marcado: document.querySelector('.hud-mochila .item.alvo')?.dataset.tipo ?? null,
+  };
+  return { comVidaCheia, msgCheia, machucado };
+});
+
+console.log('');
+console.log('=== o HUD diz o que o E vai usar? ===');
+checa('vida cheia: nenhum item marcado', vis.comVidaCheia.marcado === null, String(vis.comVidaCheia.marcado));
+checa('vida cheia: dica apagada', vis.comVidaCheia.inativa === true);
+checa('vida cheia: dica avisa', vis.comVidaCheia.dica === 'sem uso agora', vis.comVidaCheia.dica);
+checa('a recusa EXPLICA o motivo', /VIDA JÁ ESTÁ CHEIA/.test(vis.msgCheia), vis.msgCheia);
+checa('machucado: o kit fica marcado', vis.machucado.marcado === 'kit', String(vis.machucado.marcado));
+checa('machucado: a dica nomeia o item', vis.machucado.dica === 'usar KIT', vis.machucado.dica);
+checa('machucado: dica acesa', vis.machucado.inativa === false);
+
 await b.close(); vite.kill();
 console.log(falhas === 0 ? '\n>>> OK' : `\n>>> ${falhas} FALHA(S)`);
 process.exit(falhas === 0 ? 0 : 1);

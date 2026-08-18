@@ -75,10 +75,14 @@ export class Mochila {
   usar() {
     const tipo = this.oQueUsaria();
     if (!tipo) {
-      // Diferenciar as duas recusas: mochila vazia e um problema, mochila cheia
-      // com nada util agora e outro. Dizer "vazia" quando ha 3 kits e mentir.
-      const msg = this.total() === 0 ? 'MOCHILA VAZIA' : 'NADA PARA USAR AGORA';
-      this.ctx.hud?.aviso?.(msg, 900);
+      /* A recusa precisa dizer O MOTIVO, nao so que nao deu.
+       *
+       * O caso comum e traicoeiro: o kit SO entra na mochila quando a vida esta
+       * cheia (com vida baixa ele e usado na hora, no chao). Ou seja, logo depois
+       * de guardar um kit, apertar usar bate exatamente na condicao de recusa.
+       * Dizer "nada para usar" ali parece defeito — o jogador acabou de ver o
+       * item entrar. Dizer "vida ja esta cheia" fecha a duvida na hora. */
+      this.ctx.hud?.aviso?.(this._motivoDaRecusa(), 1400);
       return false;
     }
     const r = this.ctx.pickups?.aplicarEfeito?.(tipo);
@@ -90,6 +94,20 @@ export class Mochila {
     this.ctx.audio?.recarga?.('magin');
     this.ctx.bus?.emit('mochila:usou', { tipo });
     return true;
+  }
+
+  /** Frase que explica por que nada pode ser usado agora. */
+  _motivoDaRecusa() {
+    if (this.total() === 0) return 'MOCHILA VAZIA';
+    const jog = this.ctx.player;
+    const temCura = this.itens.kit > 0 || this.itens.suprimento > 0;
+    const temMun = this.itens.municao > 0 || this.itens.suprimento > 0;
+    const vidaCheia = !jog || jog.health >= jog.maxHealth;
+    const munCheia = !this.ctx.pickups?._faltaMunicao?.();
+    if (temCura && temMun) return 'VIDA E MUNIÇÃO JÁ ESTÃO CHEIAS';
+    if (temCura && vidaCheia) return 'VIDA JÁ ESTÁ CHEIA — GUARDE PARA DEPOIS';
+    if (temMun && munCheia) return 'MUNIÇÃO JÁ ESTÁ CHEIA — GUARDE PARA DEPOIS';
+    return 'NADA PARA USAR AGORA';
   }
 
   /** Zera no reinicio de partida. */

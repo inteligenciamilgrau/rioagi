@@ -438,7 +438,42 @@ export class HUD {
     }
     // A dica da tecla so aparece quando ha o que usar — poluir a tela com um
     // atalho inutil e pior do que nao mostrar.
+    // Some so com a mochila vazia. Com item guardado a dica FICA, mesmo que
+    // nada sirva agora — e ela que explica por que o E nao faz nada.
     this.elMochilaDica?.classList.toggle('some', total === 0);
+    this._alvoMocAtual = undefined;   // forca repintura do alvo
+  }
+
+  /**
+   * Marca no HUD QUAL item a tecla de usar gastaria agora.
+   *
+   * Sem isto a mochila e uma caixa preta: o jogador ve tres numeros e nao tem
+   * como saber qual deles o E consome — nem se consumiria algum. A duvida
+   * "peguei um item e ele disse que nao tem nada" nasce exatamente dai.
+   *
+   * Consulta `oQueUsaria()`, que nao tem efeito colateral, e escreve no DOM
+   * so quando a resposta MUDA. A 60 Hz isso seria layout a toa.
+   */
+  _atualizarAlvoMochila(dt) {
+    this._tAlvoMoc = (this._tAlvoMoc ?? 9) + (dt || 0.016);
+    if (this._tAlvoMoc < 0.15) return;
+    this._tAlvoMoc = 0;
+    if (!this._mochilaEls) return;
+
+    const mo = this.ctx.mochila;
+    const alvo = mo?.oQueUsaria?.() ?? null;
+    if (alvo === this._alvoMocAtual) return;
+    this._alvoMocAtual = alvo;
+
+    for (const tipo of ['kit', 'municao', 'suprimento']) {
+      this._mochilaEls[tipo]?.classList.toggle('alvo', tipo === alvo);
+    }
+    if (this.elMochilaDica) {
+      const rot = { kit: 'KIT', municao: 'MUNIÇÃO', suprimento: 'SUPRIMENTO' }[alvo];
+      const txt = this.elMochilaDica.querySelector('span');
+      if (txt) txt.textContent = rot ? `usar ${rot}` : 'sem uso agora';
+      this.elMochilaDica.classList.toggle('inativa', !alvo);
+    }
   }
 
   _onWeaponState(p) {
@@ -728,6 +763,9 @@ export class HUD {
 
     /* ---------- vida, vinhetas, batimento ---------- */
     this._atualizarVida(dt);
+
+    /* ---------- qual item o E usaria ---------- */
+    this._atualizarAlvoMochila(dt);
 
     /* ---------- bússola ---------- */
     this._atualizarBussola();
