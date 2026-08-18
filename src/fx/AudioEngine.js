@@ -1573,6 +1573,31 @@ export class AudioEngine {
    * @param {number} maisPerto distancia do drone mais proximo, em metros
    * @param {number} tensao quantos estao comprometidos com o tiro
    */
+  /**
+   * Cala o zumbido do enxame quando a simulacao nao esta correndo.
+   *
+   * PORQUE AQUI, e nao no AIManager: quem comanda o zumbido e o
+   * `AIManager._zumbir`, chamado de dentro do `ai.update()`. So que o
+   * AIManager e pausavel — ao morrer (ou pausar, ou voltar ao menu) ele para de
+   * rodar, e a ULTIMA ordem enviada fica valendo para sempre. Resultado: o
+   * jogador morre e os drones continuam zumbindo na tela de morte.
+   *
+   * O AudioEngine tem `pausable = false`, ou seja continua rodando justamente
+   * nesses estados — e por isso e ele quem consegue reparar. A regra e simples e
+   * cobre todos os casos de uma vez: som que depende de simulacao viva nao
+   * sobrevive a simulacao parada.
+   *
+   * Nao mexemos no caminho normal: com o jogo em 'jogando' quem manda continua
+   * sendo o AIManager, quadro a quadro.
+   */
+  _calarEnxameParado() {
+    const rodando = this.ctx?.state === 'jogando';
+    if (rodando) { this._enxCalado = false; return; }
+    if (this._enxCalado) return;      // ja calado; nao reagenda toda vez
+    this._enxCalado = true;
+    this.zumbidoEnxame(null, 0, 0, 0);
+  }
+
   zumbidoEnxame(pos, n = 0, maisPerto = 999, tensao = 0) {
     if (!this.ativo) return;
     if (!this._enxNos) {
@@ -2090,6 +2115,7 @@ export class AudioEngine {
     this._tiroRecente = Math.max(0, this._tiroRecente - dt * 0.9);
 
     if (this.actx.state !== 'running') return;
+    this._calarEnxameParado();
     this._ambienteLigado();
     /* Devolve ao pool as vozes cujo som ja acabou. Tambem roda dentro de
      * `_voz()`, para que a reciclagem ande mesmo se o laco do jogo parar. */
