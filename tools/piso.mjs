@@ -17,6 +17,13 @@
  *    altura 1,80 m): largada logo acima do piso achado, tem de terminar
  *    `grounded`. Raio acha triangulo; capsula responde se da para ficar em pe.
  *
+ * O QUE REPROVA E O QUE SO INFORMA. So `vazio` e `afundado` sao queda para
+ * fora do mundo, e so eles reprovam. `saliente` e `semapoio` sao RELEVO: a
+ * celula andavel tem em cima dela um telhado, um beiral, uma caixa d'agua, um
+ * carro ou um tronco — coisas que a malha (feita do PLANO) nao conhece e que a
+ * colisao conhece. Contar isso como buraco enche o relatorio de mil linhas e
+ * esconde a unica que importa.
+ *
  * 3) TUNEL — capsula caindo na velocidade TERMINAL (55 m/s, o teto de
  *    `Movement`) com o pior `dt` do jogo (0,05 s). Se `capsuleSweep` deixa
  *    passar em velocidade alta, e aqui que aparece.
@@ -189,9 +196,13 @@ const varredura = await p.evaluate(() => {
   }
   void passos;
 
+  const GRAVES = new Set(['vazio', 'afundado']);
   return {
     andaveis, celulas: ng.width * ng.height, cel: ng.cellSize,
-    falhas: falhas.length, grupos: grupos.slice(0, 40),
+    falhas: falhas.length,
+    graves: falhas.filter((f) => GRAVES.has(f.tipo)).length,
+    grupos: grupos.filter((g) => GRAVES.has(g.tipo)).slice(0, 40),
+    gruposAviso: grupos.filter((g) => !GRAVES.has(g.tipo)).slice(0, 8),
     porTipo: falhas.reduce((a, f) => (a[f.tipo] = (a[f.tipo] || 0) + 1, a), {}),
     difMedia: +(somaDif / Math.max(1, andaveis)).toFixed(3), maxDif: +maxDif.toFixed(2), maxDifEm, hist,
     tunel: { amostras, vazou, piorCaso },
@@ -205,8 +216,9 @@ console.log('');
 console.log('=== 1) COLUNA / 2) DE PE ==============================================');
 console.log(`  mapa +-${(V.size / 2).toFixed(0)} m   cota ${V.cotaMin.toFixed(1)} .. ${V.cotaMax.toFixed(1)} m   ${V.trisColisao} tris de colisao`);
 console.log(`  celulas andaveis: ${V.andaveis} de ${V.celulas} (${V.cel} m)`);
-console.log(`  celulas COM DEFEITO: ${V.falhas}   ${JSON.stringify(V.porTipo)}`);
+console.log(`  marcacoes: ${V.falhas}   ${JSON.stringify(V.porTipo)}`);
 console.log('');
+console.log(`  >> BURACO DE VERDADE (cai para fora do mundo): ${V.graves} celula(s)`);
 if (V.grupos.length) {
   console.log('  tipo      celulas    area      centro (x, z)     cota plano   piso achado');
   for (const g of V.grupos) {
@@ -214,7 +226,15 @@ if (V.grupos.length) {
       + `X=${String(g.cx).padStart(7)} Z=${String(g.cz).padStart(7)}  `
       + `${String(g.h).padStart(8)} m  ${g.y === null ? '   (nada)' : String(g.y).padStart(8) + ' m'}`);
   }
-} else console.log('  nenhuma celula andavel sem piso.');
+} else console.log('     nenhuma. Toda celula andavel tem chao embaixo.');
+console.log('');
+console.log('  (informativo) celula andavel com COISA em cima — telhado, beiral, caixa');
+console.log("  d'agua, veiculo, tronco. Nao e buraco; e o mundo em pe sobre a malha:");
+for (const g of V.gruposAviso) {
+  console.log(`  ${g.tipo.padEnd(9)}${String(g.n).padStart(5)} cel ${String(g.area).padStart(7)} m2  `
+    + `X=${String(g.cx).padStart(7)} Z=${String(g.cz).padStart(7)}  `
+    + `${String(g.h).padStart(8)} m  ${g.y === null ? '   (nada)' : String(g.y).padStart(8) + ' m'}`);
+}
 
 console.log('');
 console.log('  colisao do terreno x plano do terreno (piso achado menos cota do plano):');
@@ -303,7 +323,7 @@ if (SAIDA) {
 }
 
 await b.close(); vite.kill();
-const ok = V.falhas === 0 && V.tunel.vazou === 0 && rastro.every((s) => !s.evento);
+const ok = V.graves === 0 && V.tunel.vazou === 0 && rastro.every((s) => !s.evento);
 console.log('');
 console.log(ok ? '>>> OK' : '>>> HA BURACO');
 process.exit(ok ? 0 : 1);

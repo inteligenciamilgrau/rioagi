@@ -220,7 +220,7 @@ const aferi = await page.evaluate(() => {
     programasNoBoot: (R.info.programs || []).length,
     envolvidos,
     memoriaPrecisa: !!performance.memory,
-    aquecimento: window.__aquecimento ?? null,
+    aquecimento: ctx.debug?.aquecimento ?? null,
     sombras: ctx.lighting?.cascades + 'x' + ctx.lighting?.shadowMapSize,
   };
 });
@@ -516,6 +516,8 @@ l('    picos que coincidem com programa novo: ' + picosComProg.length + ' de ' +
   const h0 = Q[0][col.heap], h1 = Q[Q.length - 1][col.heap];
   l('');
   l('  ASSINATURA DE COLETA DE LIXO (heap JS)');
+  l('    [aferido em tools/lixocontrole.mjs: a soma das subidas SUBESTIMA ~2x —');
+  l('     e um piso, nao um teto; queda > 2 MB nao deu falso positivo nenhum]');
   l('    heap ' + (h0 / 1024).toFixed(1) + ' -> ' + (h1 / 1024).toFixed(1) + ' MB'
     + '   ·  quedas > 2 MB: ' + quedas + '  (maior ' + (maiorQueda / 1024).toFixed(1) + ' MB)');
   l('    picos coincidentes com queda de heap: ' + picosComQueda + ' de ' + picos.length);
@@ -534,10 +536,16 @@ l('');
 l('=========================================================================');
 l('OS 20 PIORES QUADROS');
 l('=========================================================================');
-l('     t(s)     ms   dProg  dHeapKB  onda vivos/dro/vis  eventos          sistemas dominantes');
+l('  "fora" = ms do quadro que NAO estao em nenhum sistema do jogo. Fora alto e a');
+l('  maquina engasgando (outro processo, fila de GPU), nao o jogo — nesta bancada');
+l('  ha outros agentes rodando Playwright, e isso aparece aqui.');
+l('');
+l('     t(s)     ms    fora  dProg  dHeapKB  onda vivos/dro/vis  eventos          sistemas dominantes');
 for (const i of piores) {
   const q = Q[i];
   const dHeap = i > 0 ? q[col.heap] - Q[i - 1][col.heap] : 0;
+  let dentro = 0;
+  ordem.forEach((k, j) => { if (!k.startsWith('>')) dentro += q[BASE + j]; });
   const ev = [];
   if (q[col.tiro]) ev.push('tiro' + q[col.tiro]);
   if (q[col.morte]) ev.push('morte' + q[col.morte]);
@@ -550,6 +558,7 @@ for (const i of piores) {
     .sort((a, b) => b[1] - a[1]).slice(0, 3);
   l('  ' + ((q[col.t] - Q[0][col.t]) / 1000).toFixed(1).padStart(7)
     + n2(q[col.dt]).padStart(8)
+    + n2(Math.max(0, q[col.dt] - dentro)).padStart(8)
     + String(q[col.dprog]).padStart(7)
     + String(dHeap).padStart(9)
     + String(q[col.onda]).padStart(6)

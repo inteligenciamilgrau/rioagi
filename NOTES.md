@@ -1017,3 +1017,611 @@ nao for preenchido a mao.
   verdade tem formacao, revezamento e reacao coletiva a baixa.
 - **Sem drone de tipo diferente** (kamikaze, sensor puro, pesado). O tema da onda
   3 se sustenta na quantidade, nao na variedade.
+
+---
+
+## [WORLD/PLAYER] O buraco no chao que nao existia, e a muralha rente a borda
+
+**O buraco no piso era do INSTRUMENTO.** `tools/borda.mjs` relatava, andando
+para o sul, `menorY = -40,2 m` — quase 37 m abaixo da cota minima do terreno
+(-3,4 m), com `Player._checarQueda` resgatando o jogador. Varri o mapa inteiro
+atras da face que faltava. Nao falta nenhuma.
+
+### 1. A causa, com numero
+
+`borda.mjs` largava o jogador numa cota FIXA: `favela.cotaMin + 30` = **26,6 m**.
+O morro tem 39 m de desnivel, e na borda sul, em (0, -78), o terreno esta em
+**32,4 m**. O jogador nascia **5,8 m DENTRO da encosta**.
+
+Debaixo do terreno nao ha o que segure ninguem:
+
+- a **"saia" das bordas** (`World._saiaTerreno`) e malha VISUAL e nunca entrou
+  no BVH — existe so para nao se enxergar o vazio de longe;
+- `_depenetrate` so empurra quem PENETRA um triangulo, e quem esta 6 m abaixo
+  da superficie nao encosta em nada;
+- `_sondaChao` atira os 5 raios de cima para baixo, e de dentro do morro todos
+  saem pela parte de baixo do terreno sem bater em nada.
+
+Queda livre ate o teto de 55 m/s, `y < -40`, resgate. De dentro do jogo isso le
+exatamente como "atravessei o chao".
+
+### 2. O mapa NAO tem buraco — medido celula por celula
+
+`tools/piso.mjs` (novo) varre as **85 258 celulas andaveis** do `navGrid`
+(0,5 m) com quatro medicoes independentes:
+
+| medicao | o que testa | resultado |
+|---|---|---|
+| COLUNA | raio de cima para baixo: ha QUALQUER triangulo embaixo? | **0 colunas vazias** |
+| DE PE | a capsula (0,35 x 1,80 m) termina `grounded` ali? | 299 avisos, nenhum e queda |
+| TUNEL | queda a 55 m/s com o pior `dt` do jogo (0,05 s) | **0 de 1 765 atravessaram** |
+| RASTRO | 25 s andando contra cada borda, com largada correta | **0 mergulhos nas 4** |
+
+Nenhuma das quatro suspeitas classicas se confirmou: nao ha face faltando no
+terreno, nao ha quina aberta entre terreno e laje, `capsuleSweep` nao tunela em
+velocidade terminal e nao ha normal invertida de casa ou de escada.
+
+Colisao do terreno x plano do terreno, nas celulas andaveis: **69 355 dentro de
++-0,25 m**, 3 363 entre 0,25 e 0,75 m acima, 691 entre 0,25 e 0,75 m abaixo, e
+so **5 celulas** mais de 0,75 m abaixo. A colisao do terreno e decimada (1
+triangulo a cada 2 m contra 1 m da malha visual) e e dai que vem essa dispersao.
+
+### 3. Tres armadilhas de medicao que a propria ferramenta pagou
+
+**(a) Sonda de chao largada PERTO do chao mente.** A primeira versao do
+`piso.mjs` largava o raio em `plano + 0,60 m` e acusou **44 celulas sem piso**
+(40 "vazio", 3 "fundo", 1 normal ruim) — entre elas (51,5, -36,8), (67,1, -4,9),
+(-18,8, -3,3), (17,3, 38,8). Nenhuma existe: onde a colisao decimada sobe acima
+do plano, o raio nascia DENTRO do morro apontando para baixo e nao batia em
+nada. Sonda de chao se larga de CIMA.
+
+**(b) Sonda largada ALTA DEMAIS acha a muralha.** Trocando o teto para
+`cotaMax + 60`, o raio passou a bater na TAMPA da muralha invisivel (que vai ate
+`cotaMax + 30` e atravessa o mapa de ponta a ponta): **6 182 celulas** viraram
+"piso a 65,72 m". O teto da sonda agora sai de `world.muralha.topo`.
+
+**(c) O vetor de movimento e relativo ao YAW, e ninguem escrevia o yaw.**
+`Movement` monta a frente com `_fwd = (-sin yaw, 0, -cos yaw)` a partir de
+`cmd.yaw`, que vem do `CameraRig`. `borda.mjs` sobrescrevia `getMoveVector` mas
+deixava o yaw como `Player.init()` tinha sorteado — os quatro "rumos cardeais"
+andavam todos para o lado errado. **Quem dirigir o jogador por codigo escreve
+`jog.rig.reset(Math.atan2(-dx, -dz), 0)` ANTES de mexer no vetor de movimento.**
+A mesma conta vale para apontar a CAMERA de captura: escrito a mao, leste e
+oeste saem trocados e a foto olha para dentro do mapa.
+
+### 4. O que mudou no jogo, e nao so nas ferramentas
+
+**`Movement.teleport` ganhou guarda contra pouso dentro do morro.** Destino
+abaixo de `world.heightAt(x, z) - 0,5` sobe para a cota do chao e avisa no
+console. A referencia e o PLANO do terreno, nao um raio de cima para baixo: raio
+devolveria o TELHADO de quem esta dentro de casa, e teleporte para o interior
+passaria a jogar o jogador em cima dela. Piso de construcao esta sempre na cota
+do terreno ou acima, entao a guarda so pega quem ficou realmente enterrado.
+Isso mata a classe inteira do defeito, venha ela de ferramenta, de `respawn()`
+ou de `_checarQueda`.
+
+**`Player._checarQueda` continua igual e continua sendo a ultima rede.** Com a
+largada corrigida, ela nao dispara mais em nenhuma das quatro bordas.
+
+### 5. A muralha da borda, apertada com medida
+
+`MARGEM_BORDA` era **2,5 m medida ate o EIXO da caixa**, e a caixa tem 2 m de
+espessura: a conta que o jogador sentia era `2,5 + 1 = 3,5 m` de terreno
+inalcancavel em todo o perimetro. A quina do mapa — que e boa justamente para
+correr e escapar — nao existia para ele.
+
+Agora `MARGEM_BORDA` e medida ate a **face interna**, que e onde o corpo para, e
+vale **0,6 m**. O raio da capsula e 0,35 m, entao o corpo inteiro fica sobre
+terreno com folga.
+
+| | antes | depois |
+|---|---|---|
+| face interna | +-86,5 m | **+-89,4 m** |
+| eixo da capsula chega a | +-86,15 m | **+-89,05 m** |
+| terreno alem do corpo | 3,5 m | **0,6 m** |
+| area jogavel | 173,0 x 173,0 m (92,3%) | **178,8 x 178,8 m (98,7%)** |
+
+Medido em `tools/muralha.mjs`, indo contra as quatro bordas **andando,
+agachado e deslizando** (12 tentativas de 16 s): todas encostaram, **0 quadros
+fora dos limites, 0 quedas**, corpo parando sempre a 0,60 m da aresta, com pico
+de 8,4 m/s no deslize e 70-73 quadros deslizando por borda. A ferramenta procura
+na malha uma faixa de 13 m livre ate a parede antes de largar o boneco — sem
+isso ele empaca numa casa e o teste passa sem que ninguem tenha chegado la
+(aconteceu: tres dos quatro rumos paravam a 15 m da barreira).
+
+**A camera nao ve rasgo nenhum, e a troca e outra do que se supunha.**
+Encostado na parede e olhando para fora, o chao so aparece entre **-41 e -67
+graus** abaixo do horizonte (e o que aparece e a SAIA do terreno, nao o terreno)
+e dali para baixo nunca volta a ficar vazio — nao ha buraco entre o chao e o
+horizonte em nenhuma das quatro bordas, de pe ou agachado.
+
+O que muda com a margem apertada nao e ver ou nao ver o vazio; e QUANTO da tela
+ele ocupa. A 3,5 m a aresta entrava no quadro a ~24 graus e sobrava uma faixa de
+chao alem do corpo; a 0,6 m ela so entra a ~60 graus, e entre o horizonte e isso
+o que se ve e **nevoa de distancia** — a mesma que se ve de qualquer ponto alto
+do morro, porque fora dos 180 m nao existe mundo nenhum modelado. Nao le como
+defeito, mas le como fim de arena. Se um dia incomodar, o lugar de resolver e
+cenario de fundo alem da borda, nao a espessura da barreira. Capturas em `shots/borda/`:
+`*-olhando.png` (pitch -12, a vista de jogo) e `*-aresta.png` (pitch -50, cabeca
+baixa). Em nenhuma delas ha rasgo: abaixo do horizonte o que aparece e a nevoa
+de distancia, nao buraco preto.
+
+**`world.muralha` e publico** (`meia`, `faceInterna`, `base`, `topo`,
+`espessura`, `margem`). Quem medir borda usa isso em vez de refazer a conta e
+errar meia espessura.
+
+**O `navGrid` agora zera a faixa atras da muralha** (passo 4b). Antes a malha
+saia do PLANO, que nao sabe da barreira, e a IA planejava caminho para uma faixa
+que a colisao proibe. Celulas andaveis: 88 007 -> 85 258.
+
+### 6. Ferramentas
+
+- `tools/piso.mjs` (novo) — as quatro medicoes da secao 2, com `--json` para
+  comparar antes e depois. So `vazio` e `afundado` reprovam; `saliente` e
+  `semapoio` sao informativos (telhado, beiral, caixa d'agua, veiculo ou tronco
+  em cima de celula andavel — a malha sai do plano e nao conhece nada disso).
+- `tools/muralha.mjs` (novo) — geometria da barreira, os 12 encostroes, o
+  angulo em que a aresta aparece e as quatro capturas. `SO_FOTO=1` refaz so as
+  fotos.
+- `tools/borda.mjs` — corrigido (largada sobre o chao daquele ponto, yaw
+  escrito) e com duas verificacoes novas: a largada tem de ser no ar e o corpo
+  tem de terminar sobre o terreno.
+
+### 7. O que continua aquem
+
+- **A colisao do terreno e 2 m; a malha visual e 1 m.** Em 5 celulas o piso de
+  colisao fica mais de 0,75 m ABAIXO do que se ve, e em 3 363 de 0,25 a 0,75 m
+  ACIMA. Ninguem cai por isso, mas o pe afunda ou flutua um pouco em quina de
+  plataforma achatada. Casar as duas resolucoes custa 4x os triangulos de
+  terreno (16 200 -> 64 800, de um total de 94 360) e nao foi medido em fps.
+- **299 celulas andaveis onde a capsula nao fica `grounded`** no topo da coluna
+  — telhado estreito de prop, capo de carro, barranco decimado mais ingreme que
+  o plano. Nao e queda para fora do mundo (ha chao logo abaixo), mas e
+  desacordo entre malha e colisao, e a IA pode planejar por ali.
+- **`tools/borda.mjs` no rumo sul para a 4,36 m da aresta**, barrado por
+  geometria antes de encostar na muralha. O teste passa, mas naquela borda ele
+  nao esta exercitando a barreira — quem exercita e o `muralha.mjs`, que
+  escolhe a faixa livre.
+
+---
+
+## [CORE] O travamento intermitente: era compilacao de shader na entrada do inimigo
+
+O relato foi "pico de CPU, GPU tranquila, principalmente quando a tela enche de
+player e surgem drones". Medido quadro a quadro, e exatamente isso — e a causa
+tem nome, numero e um so lugar.
+
+### 0. O instrumento vem primeiro: `tools/pico.mjs`
+
+Travamento intermitente nao se acha lendo codigo. `tools/pico.mjs` grava, para
+CADA quadro de uma partida de verdade (piloto automatico que anda, mira nos
+hostis, atira, recarrega, abre porta e troca de arma):
+
+`dt do rAF` · `renderer.info.programs.length` · heap JS · draw calls ·
+triangulos · o tempo de **cada** sistema do laco (com os suspeitos aninhados
+nomeados: `_regenerateEnvironment`, `refreshMaterials`, `_renderEnv`,
+`_updateCascades`) · os eventos daquele quadro · onda e censo de hostis.
+
+Com isso as tres assinaturas de travada se separam sozinhas, e o relatorio
+testa as tres explicitamente:
+
+| assinatura | como se prova | veredito medido |
+|---|---|---|
+| PERIODICO | picos alinhados com um periodo do codigo | **descartado** |
+| COMPILACAO | pico coincide com `programs.length` subindo | **e esta** |
+| COLETA DE LIXO | pico coincide com o heap CAINDO | **descartado** |
+
+O roteiro e a parte que responde a pergunta certa: cada familia de inimigo
+entra em cena **duas vezes**, com o campo limpo entre uma e outra
+(`1a-onda-chao` · `2a-leva-chao` · `1o-enxame-drone` · `2o-enxame-drone` ·
+`chao+drone-juntos`). Pico so na primeira = compilacao. Pico nas duas = spawn.
+
+### 1. Causa raiz medida
+
+No three.js o programa de um material so e compilado quando aquela COMBINACAO
+entra pela primeira vez no funil de render. Hostil e drone ficam
+`visible = false` no pool ate nascer, entao **nada deles foi compilado enquanto
+nao aparece o primeiro**. No quadro em que a leva entra, o ANGLE traduz e
+compila tudo de uma vez, na thread principal.
+
+Partida de 179 s, 1280x720, preset alto, GTX 1060 (D3D11):
+
+```
+p50 16,70 ms · p90 19,30 · p99 24,40 · p99.9 36,70 · PIOR 1554,10 ms
+```
+
+Os DOIS unicos quadros catastroficos da corrida inteira sao os dois em que
+`programs.length` subiu:
+
+| quadro | ms | programas novos | quais |
+|---|---|---|---|
+| 1a entrada de hostil de chao | **1554,10** | 3 | `depth` com skinning (material de sombra) + 2x `ai_soldado` |
+| 1a entrada do enxame de drone | **655,30** | 1 | `ai_drone` |
+
+E o teste de "primeira vez x toda vez" fecha o caso — mesma corrida, mesmo
+instrumento, campo limpo entre as levas:
+
+| trecho | p50 | p99 | PIOR | programas novos |
+|---|---|---|---|---|
+| 1a-onda-chao | 16,70 | 24,90 | **1554,10** | 3 |
+| 2a-leva-chao | 16,70 | 21,50 | 36,70 | 0 |
+| 1o-enxame-drone | 16,70 | 22,60 | **655,30** | 1 |
+| 2o-enxame-drone | 16,70 | 21,50 | 26,80 | 0 |
+| chao+drone-juntos | 16,80 | 28,00 | 38,50 | 0 |
+
+Repetido em 4 corridas sem aquecimento: o pior quadro da 1a onda de chao deu
+1554 / 1933 / 3416 / 3473 ms, **sempre** com os mesmos 3 programas; o do 1o
+enxame deu 655 / 727 / 731 / 1179 ms, sempre com 1. A segunda entrada nunca
+passou de 46 ms. Nao ha ambiguidade.
+
+**As outras duas hipoteses foram medidas e descartadas na mesma corrida:**
+- `Sky._envInterval = 96` -> `Lighting._regenerateEnvironment` (PMREM novo a
+  cada 96 quadros, com `dispose` do anterior) custa **mediana 0,00 ms, p99 0,40,
+  MAXIMO 1,9 ms**. Nao e o pico. O teste de alinhamento com periodo 96 tambem
+  nao acusa nada (maior classe 1 de 7 picos, acaso ~0,1).
+- Coleta de lixo: apenas 2 dos 7 picos coincidem com queda de heap, e nenhum
+  dos dois quadros ruins.
+
+### 2. A correcao — `src/core/Aquecimento.js` (novo)
+
+`aquecerCena(ctx)`: expoe tudo que esta invisivel (hostil, drone, lote de
+helices, item, arma guardada) com `frustumCulled = false`, e desenha **dois
+quadros de verdade** com o pipeline real. Antes disso, um passe
+`compileAsync` paralelo com o alvo e o tonemap corretos.
+
+**Tres detalhes sem os quais o aquecimento nao funciona** (todos verificaveis
+na chave de cache do programa):
+
+1. **`renderer.compile()` NAO cobre o material de profundidade da sombra.** Um
+   dos tres programas do quadro de 1,5 s era exatamente esse — criado pelo
+   `WebGLShadowMap`, nao pelo passe principal. So um render de verdade o pega.
+2. **A chave de cache inclui `toneMapping` e `outputColorSpace`, e os dois
+   dependem do ALVO.** Com PostFX ligado o `Engine` poe `NoToneMapping` e
+   desenha o mundo num alvo HDR linear; compilar contra a tela (sRGB + ACES)
+   gera programa com outra chave, que o jogo nunca usa. Por isso o aquecimento
+   tem de rodar **no fim do boot**, depois de o `PostFX` existir.
+3. **`ctx.lighting.refreshMaterials()` ANTES de compilar.** Sem os defines
+   `USE_CSM`/`CSM_CASCADES`/`OCA_PCSS` no material, a variante compilada nao e
+   a que o jogo usa e ela seria recompilada no primeiro quadro de jogo.
+
+`?semaquecer=1` na URL desliga tudo. Existe so para o lado "antes" do A/B do
+`pico.mjs` — nao use em outra coisa.
+
+### 3. Antes x depois
+
+| | sem aquecimento | com aquecimento |
+|---|---|---|
+| programas compilados DURANTE a partida | **4** (em 4 de 4 corridas) | **0** (em 4 de 4 corridas) |
+| pior quadro na 1a entrada de hostil de chao | 1554 · 1933 · 3416 · 3473 ms | 29 · 62 · 138 · 282 ms |
+| pior quadro na 1a entrada do enxame | 655 · 727 · 731 · 1179 ms | 49 · 208 · 432 · 472 ms |
+| p50 / p99 (corrida mais limpa, 180 s) | 16,70 / 24,40 ms | 17,00 / 38,10 ms |
+| boot | 22,2 s | 28,8 s (aquecimento 10,4 s) |
+
+O custo e o boot: **+6,6 s de barra de carregamento**. Nao e trabalho novo — e
+o MESMO trabalho, movido para onde ninguem sente. Sem aquecimento os 40
+programas do mundo compilavam nos primeiros quadros depois de `boot:done`
+(engasgo na entrada do menu) e os 4 do inimigo no primeiro combate.
+
+O passe `compileAsync` paralelo vale 4 s desses 10,4 (era 14,5 s so com render
+de verdade). Ele resolve 24 dos 44 programas; os outros 20 saem dos dois
+quadros reais em 1,2 s.
+
+### 4. O que os outros modulos precisam saber
+
+- **`ctx.debug.aquecimento`** e o relatorio do aquecimento
+  (`{ms, msParalelo, programasAntes, programasDepois, expostos, paralelo}`).
+- **Material NOVO criado depois do boot volta a engasgar.** Se algum modulo
+  passar a criar material em runtime (arma nova, efeito novo, variante de
+  inimigo), o programa dele compila no primeiro uso e o pico volta. O caminho
+  e criar o objeto antes do fim do boot (mesmo invisivel) — o `Aquecimento`
+  pega qualquer coisa que ja esteja na cena, visivel ou nao.
+- **`userData.semAquecimento = true`** exclui um objeto do aquecimento. Nao ha
+  nenhum hoje; e gancho para quem precisar.
+- **`main.js` mudou em 9 linhas** (dono: CORE): um `import` e um bloco de duas
+  linhas com `progress('Compilando shaders', 0.99)` logo antes de
+  `progress('Pronto', 1.0)`. Nada mais foi tocado la.
+- **FX (pedido, nao editei — o arquivo esta com outro agente):**
+  `FXManager._preAquecer` chama `renderer.compileAsync(ctx.scene, ctx.camera)`
+  no meio do boot, ANTES de o `PostFX` e a `AIManager` existirem. Pelos dois
+  motivos da secao 2 (alvo/tonemap errados e cena sem inimigo) ele nao podia
+  cobrir este defeito. A emissao de particula/decal/tracer de mentira que ele
+  faz continua util (sobe atributo de instancia e textura); o bloco de
+  `compile`/`compileAsync` virou redundante com o `Aquecimento`. Nao medi o
+  custo isolado dele, entao nao afirmo que remove-lo economiza boot.
+
+### 5. Ferramentas
+
+- `tools/pico.mjs` — a ferramenta acima. `MEDIR=` segundos, `AQUECER=0` para o
+  lado "antes", `TAG=` nomeia o dump (`tools/pico.<tag>.json`). Ficam gravados
+  `tools/pico.antes.json` e `tools/pico.depois.json`, as duas corridas de
+  referencia de 180 s.
+- `tools/lixocontrole.mjs` — afericao dos medidores de alocacao (secao 7).
+
+**Armadilhas destas, ja pagas:**
+1. **Rodar `ai.update()` num laco sincrono dentro de `page.evaluate` bloqueia o
+   rAF** — nao existe quadro para medir. Tudo aqui roda no laco de verdade.
+2. **A coluna "fora"** do relatorio (ms do quadro que nao estao em nenhum
+   sistema do jogo) e o que separa "o jogo engasgou" de "a maquina engasgou".
+   Nesta bancada, com outros agentes rodando Playwright, apareceram quadros de
+   2 a 3 s com **fora ~= dt** e zero trabalho do jogo dentro. Sem essa coluna
+   eles seriam lidos como defeito do jogo. Os picos de compilacao, ao
+   contrario, tem `fora` de 2 a 10 ms: o tempo esta TODO dentro do `render`.
+3. **Comecar a gravar com o campo ja povoado nao serve**: o primeiro quadro
+   medido ja e o quadro da entrada e nao ha linha de base. O roteiro grava 4 s
+   de campo vazio antes de qualquer coisa.
+4. Piloto automatico que so gira o YAW nao produz combate: o drone voa a
+   2,4-4,2 m e o hostil pode estar num nivel acima. Sem mira em pitch o boneco
+   atira no muro e a carga nunca acontece.
+
+### 6. O que continua engasgando (medido, nao resolvido)
+
+- **`render` p99 e 24 ms com p50 de 6,3 a 7,8 ms.** A cauda normal do quadro
+  mora quase toda no `engine.render`, e ela existe com aquecimento ou sem. Nao
+  investiguei: nao e travamento, e variacao de custo de desenho.
+- **Um quadro de 3307 ms com `ai.update` = 3248 ms**, uma unica vez em 8
+  corridas, sem programa novo e sem queda de heap. **Nao sei explicar.** Pode
+  ser o processo sendo desescalonado dentro do `ai.update` (a mesma corrida tem
+  dois quadros de 2,1 e 2,6 s com `fora ~= dt`, que sao claramente da maquina),
+  pode ser um caso patologico de busca de rota. Quem for mexer na IA: rode
+  `tools/pico.mjs` numa maquina ociosa e veja se reaparece.
+- **Um quadro de 796 ms e outro de 3105 ms com o tempo TODO dentro do
+  `render`, e ZERO programa novo.** Compilacao esta descartada por construcao.
+  Suspeito da fila da GPU (ha outros Chrome renderizando nesta bancada) ou de
+  criacao de estado de pipeline no ANGLE, que nao aparece em
+  `info.programs`. Nao consegui provar nem descartar.
+- **A bancada esta ruidosa e isso contamina o p99.** Nas 8 corridas o p99 do
+  mesmo binario variou de 24 a 104 ms conforme a carga externa. **Compare
+  sempre dentro da mesma corrida**; o numero que sobrevive ao ruido e
+  "programas novos durante a partida", que deu 4 e 0 sem excecao.
+
+### 7. AFERICAO: como NAO medir alocacao neste projeto
+
+O relatorio do `pico.mjs` acusa ~650 KB alocados por quadro e centenas de
+quedas de heap maiores que 2 MB. Antes de acusar qualquer modulo, aferi os
+medidores com um alocador de tamanho CONHECIDO (`tools/lixocontrole.mjs`,
+~57,2 MB em 600 quadros):
+
+| instrumento | leu |
+|---|---|
+| alocado de verdade | ~57,2 MB |
+| amostrador de alocacao do V8 via CDP (`HeapProfiler.startSampling`) | **0,0 MB** |
+| soma das SUBIDAS de `performance.memory.usedJSHeapSize` | 27,6 MB |
+
+1. **Nao use `HeapProfiler.startSampling` para achar quem aloca aqui.** Erra
+   por mais de 1000x — nao enxerga a alocacao de vida curta, que e justamente a
+   que interessa. Uma passada inteira foi gasta assim, e a ferramenta que a
+   usava foi apagada em vez de ficar no repositorio mentindo.
+2. A soma das subidas de `performance.memory` e um **piso** (subestimou 2x),
+   nunca um teto. Se ela acusa 650 KB por quadro, e pelo menos isso.
+3. Queda de heap maior que 2 MB nao deu **um unico falso positivo** no
+   controle: quando o relatorio conta centenas delas, sao coletas de verdade.
+
+Ou seja: **o jogo aloca muito** (>= 650 KB por quadro em combate, contra a
+regra 6 do `ARCHITECTURE.md`) e coleta com frequencia. Isso e divida real, mas
+**nao e a causa do travamento relatado**: so 2 a 11 dos picos por corrida
+coincidem com queda de heap, e nenhum dos quadros catastroficos. Quem for
+atras disso precisa antes de um instrumento que funcione — nenhum dos dois
+acima serve para apontar a linha.
+
+---
+
+## [PLAYER/morte] A queda encenada, o engasgo da tela final, e o impacto que tocava duas vezes
+
+Tres coisas numa passada: a morte virou CENA, a tela de morte parou de custar
+um quadro inteiro, e o som de impacto duplicado (achado anterior, em aberto)
+foi resolvido.
+
+### 1. A morte agora tem um beat — `src/player/QuedaMorte.js` (novo)
+
+Antes: `player:died` trocava o estado, escondia o HUD e 900 ms depois a tela
+entrava. A camera nao se mexia um pixel.
+
+Agora: **estado novo `'caindo'`** entre `'jogando'` e `'morto'`. O corpo tomba,
+a vista vai ao chao em camera lenta, e so quando a queda termina e que a tela
+de morte entra — por **`player:caiu`**, evento novo.
+
+**O modelo e uma barra rigida articulada nos PES que encolhe enquanto cai.**
+`alpha = (3g/2L)*sin(theta)`, com `g = 14,5` (o mesmo exagero do `Ragdoll.js`,
+pela mesma razao: 9,81 ja le como camera lenta). O comprimento vai de 1,68 m a
+42% disso ao longo da queda — poste cai inteiro, gente desaba, e e o
+encolhimento que faz a diferenca entre as duas leituras.
+
+A camera e rigida na ponta da barra: **um** quaternion em torno de
+`cross(cima, dirQueda)`. Sem decomposicao em pitch e roll — quem cai de lado ve
+o horizonte girar, quem cai para a frente ve o chao subir, e a mistura sai certa
+sozinha. **A ORDEM DO PRODUTO VETORIAL IMPORTA** e eu errei nela: com
+`cross(dirQueda, cima)` o topo tomba para `-dirQueda` e o jogador cai de costas,
+terminando de cara para o ceu. So apareceu na foto.
+
+**Por que NAO o `Ragdoll.js`** (foi avaliado, esta escrito no cabecalho do
+arquivo): ele escreve **quaternion de OSSO** de um `Soldier`, e o jogador nao
+tem malha nem esqueleto — usa-lo exigiria fabricar um esqueleto falso para ler
+uma particula e jogar quatorze fora; ragdoll em primeira pessoa le como bug de
+fisica, nao como drama; e `Ragdoll._colidir` **so conhece o chao**, entao a
+parte dificil (nao terminar dentro de parede) teria de ser escrita do zero de
+qualquer jeito. O que foi reaproveitado dele: a gravidade exagerada, o cache de
+altura de chao por celula e o saneamento de valor nao-finito.
+
+### 2. Camera lenta: `ctx.time.scale` (contrato NOVO do CORE)
+
+`main.js` multiplica o dt de TODOS os sistemas por `ctx.time.scale` antes de
+repassar. Quem encena escreve nela; hoje so a `QuedaMorte`.
+
+- **`ctx.time.dtReal` e o dt de PAREDE do mesmo quadro.** Quem conta tempo de
+  relogio (duracao de encenacao, espera de UI) LE DALI. Contar com `dt` faz a
+  camera lenta esticar tambem a espera do jogador.
+- **Quem liga a escala tem de desliga-la em TODOS os caminhos de saida.**
+  `respawn()` e `destravar()` chamam `queda.cancelar()`; o botao "Abandonar" do
+  menu tambem. Escala presa em 0,42 e o pior defeito possivel aqui — o jogo
+  inteiro passa a rodar a 42% e ninguem liga a causa a tela de morte.
+- Valores medidos: escala **0,42**, queda inteira **1,34 s de parede**. Sem
+  escala a queda dura 0,56 s e o jogador nao registra que caiu.
+
+### 3. A trava de 5 s da tela de morte NAO foi tocada
+
+`Menu._travarMorte` continua sendo a unica dona da espera, disparada por
+`mostrar('morte')`. O que mudou foi **quando a tela entra**: era um prazo cego
+de 900 ms, agora e o fim da queda. O `Menu` parou de escrever
+`ctx.state = 'morto'` no `player:died` — era isso que congelava o
+`Player.update` no primeiro quadro e impedia qualquer encenacao. Ha uma rede de
+seguranca de 2,6 s caso `player:caiu` nunca chegue (aba em segundo plano,
+excecao no meio da queda).
+
+Primeiro clique do jogador: **~6,3 s** (1,3 de queda + 5 de trava), contra 5,9 s
+antes.
+
+### 4. O ENGASGO — medido, e nao era nenhum dos suspeitos
+
+`tools/telafinal.mjs` (novo). Mede o periodo REAL do `requestAnimationFrame`
+com o laco do jogo rodando por baixo — nao `engine.render()` em rajada, porque
+o custo de um overlay de DOM e de COMPOSICAO do navegador e so aparece num
+quadro de verdade. Reporta mediana, **p95 e maximo**: "travar" e PICO de quadro,
+e um quadro de 90 ms no meio de sessenta de 11 ms some na media.
+
+**Os dois suspeitos apontados foram DESCARTADOS por medicao:**
+
+- **`feTurbulence` do `fundo-grao`**: delta de -0,1 a +1,7 ms entre quatro
+  execucoes, com o SINAL TROCANDO. Esta abaixo do piso de ruido. E, decisivo:
+  **ele nem existe na tela de morte** — `${fundo}` so entra em `tela-carga` e
+  `tela-menu`, e telas inativas ficam em `visibility: hidden`.
+- **`.sangria`**: delta 0,00 ms em duas execucoes. E um gradiente estatico; o
+  navegador pinta a camada uma vez.
+
+**A causa real:** com o jogador morto a cena esta congelada — ninguem anda, a
+IA nao roda, a camera nao mexe — e o jogo continuava **redesenhando 5,9 M de
+triangulos e ~750 draw calls 60 vezes por segundo para produzir o MESMO
+quadro**. Medido: o render valia 8,9 a 13,4 ms de um quadro de 9,7 a 14,1 ms;
+TODO o resto junto (overlay de DOM, audio, mundo, HUD, pos-processamento) valia
+**0,7 ms**.
+
+Correcao em `main.js`, duas linhas de efeito:
+- `PASSO_MORTO = 4` — em `'morto'`, redesenha a cada 4 quadros (~15 Hz).
+  Congelar de vez foi descartado: em driver que nao preserva o buffer de
+  desenho o canvas pode piscar preto.
+- `Sky.update` e `Lighting.update` **nao rodam em `'morto'`**. O `Sky` regenera
+  o mapa de ambiente (um PMREM inteiro) a cada 96 quadros — um pico a cada
+  1,6 s numa tela em que nada muda.
+
+**Resultado, A/B na MESMA execucao** (cenario `morte-como-antes` = mesma
+marcacao, mesmo CSS, mesma cena, redesenhando todo quadro):
+
+| | antes | depois | ganho |
+|---|---|---|---|
+| campo vazio, mediana | 8,4 – 19,1 ms | 0,5 – 0,8 ms | 7,7 – 18,3 ms |
+| campo vazio, p95 | 13,7 – 29,0 ms | 6,9 – 15,9 ms | 5,3 – 13,1 ms |
+| em combate (onda 1), mediana | 11,4 – 19,0 ms | 0,6 – 0,9 ms | 10,8 – 18,2 ms |
+| em combate, p95 | 16,0 – 38,0 ms | 10,9 – 17,0 ms | 5,1 – 21,0 ms |
+
+Faixas porque sao quatro execucoes. **Nao compare estes numeros com os de outra
+execucao**: entre a primeira e a segunda medicao outro agente somou
+pre-aquecimento de shader ao boot e o lado `jogando` mudou junto. So o par A/B
+dentro da mesma execucao vale.
+
+### 5. `weapon:hit` tocava impacto DUAS vezes — RESOLVIDO
+
+O achado da secao 8 de [AI]/drone estava em aberto. **O dono agora e o AUDIO.**
+A linha `this.ctx.audio?.impacto?.(...)` saiu de `FXManager._aoAcertar`;
+`AudioEngine._assina` ja assinava `weapon:hit` desde sempre.
+
+Por que o AUDIO e nao o FX: ele assina o evento direto do barramento (nao
+depende de o FX estar vivo nem de a qualidade ter cortado particula), e som e o
+modulo dele. O FX ali cuida do que e visivel — particula, decal, clarao.
+
+Conferido em `tools/audioenxame.mjs`: `weapon:hit 148 -> A.impacto 148`, **1:1**
+(era 197 -> 394). Descarte 0%, deriva do relogio de audio 4 ms em 12 s (0,04%).
+
+### 6. O que os outros modulos precisam saber
+
+- **`ctx.state` tem um valor novo: `'caindo'`.** Quem testa `!== 'jogando'`
+  continua correto. Quem testa `=== 'morto'` para saber se o jogador morreu
+  **agora perde a janela da queda** — use `ctx.player.alive === false`.
+- **`ctx.time.scale`** (novo) e **`ctx.time.dtReal`** (novo). Ver secao 2.
+- **`player:caiu`** (novo, PLAYER -> UI): `{ duracao:number, posicao:Vec3 }`.
+  Sai quando a encenacao termina, imediatamente antes de `ctx.state` virar
+  `'morto'`. E o gatilho da tela final.
+- **`Player._die(fromDir)`** ganhou um argumento (a direcao do tiro que matou,
+  usada como desempate do lado da queda). Chamadas sem argumento seguem validas.
+- **`ctx.player.queda`** e publico: `.ativa`, `.iniciar(dir)`, `.cancelar()`,
+  `.determinista` (para ferramenta de captura: tira o sorteio, duas mortes saem
+  iguais).
+- **`ViewModel.quedaT`** (0..1, escrito pela `QuedaMorte`): a arma afunda, rola
+  e some. Camada ADITIVA no fim de `update()`, depois da composicao final — a
+  pose de quadril/ADS/corrida segue sendo calculada normal. A luneta continua
+  mandando: `root.visible` e o E logico das duas condicoes.
+- **`player:land` e emitido no baque do corpo** (`velocity: 6.5`, superficie
+  medida por raycast). Reuso deliberado: o AUDIO ja tem a batida por superficie,
+  o FX ja levanta poeira no ponto e o Player ja converte em dip de camera.
+- **Em `'caindo'` so `ctx.player` e `ctx.fx` atualizam** (alem dos
+  `pausable === false` de sempre). IA, `Progressao` e `Pickups` ficam parados.
+- **Em `'morto'` o render e a 15 Hz e ceu/iluminacao nao rodam.** Se alguem
+  precisar de animacao viva na tela de morte, e aqui que se mexe.
+
+### 7. Prova de que a camera nao termina dentro de geometria
+
+`tools/queda.mjs`, 40 quedas: 20 pontos de spawn, cada um **no aberto e
+ENCOSTADO na parede** (o boneco e empurrado ate 0,45 m da parede mais proxima e
+virado de cara para ela — morrer no meio da rua nao prova nada).
+
+**40/40 livres. Folga minima ate a geometria mais proxima: 0,341 m** em todos os
+casos, que e exatamente o raio de seguranca. 40/40 acima de 0,15 m do piso.
+
+Tres defesas, em ordem de importancia:
+1. **`_avancar`** — o olho parte do EIXO DA CAPSULA do jogador, o unico ponto do
+   mundo que se sabe livre de graca (o `Movement` mantem a capsula fora de
+   geometria todo quadro), e caminha dali com um `sphereCast` que para no
+   primeiro contato. **Nunca entra**, em vez de entrar e ser resgatado.
+2. Piso por raycast vertical com cache por celula.
+3. Depenetracao por esfera (`sphereCast` com `maxDist = 0`), a mesma do drone.
+
+A versao sem o item 1 — so depenetracao — **falhou em 1 de 40**, com a camera a
+0,011 m de uma face: a depenetracao nao acha superficie quando o ponto ja esta
+mais fundo que o raio de busca.
+
+### 8. Ferramentas novas, e as armadilhas que elas pagaram
+
+`tools/queda.mjs` — cronometro da encenacao, sequencia de capturas, auditoria de
+geometria em 40 quedas, e a volta (morrer, reiniciar, morrer de novo).
+`tools/telafinal.mjs` — ms/quadro nas telas finais, com A/B de cada suspeito.
+
+**Nao repita:**
+
+1. **`page.screenshot()` leva 200-600 ms e isso NAO entra em
+   `waitForTimeout(marco - anterior)`.** A primeira sequencia matava uma vez e
+   tirava nove fotos seguidas; o quadro rotulado "t=180 ms" era o de ~1 s, com o
+   corpo ja no chao. A sequencia inteira mentia sobre o proprio eixo do tempo.
+   Agora e **uma morte por captura**, com `queda.determinista = true`.
+2. **"Ha superficie a menos de R" NAO e o criterio de penetracao.** A primeira
+   auditoria usou `sphereCast(p, dir, 0.30, 0)` e reprovou 6 de 6 — todos com a
+   superficie a 0,30 m exatos. Era o instrumento medindo a propria correcao: a
+   depenetracao POE o olho a `RAIO_OLHO` da geometria, entao aquilo e verdade
+   por construcao. O criterio certo e a ENVOLTURA — leque de 26 direcoes,
+   contando quantas batem perto. Dentro de um solido, todas batem.
+3. **Sonda de altura de chao: `groundAt` NAO serve, e `olho + 2,0 m` tambem
+   nao.** O primeiro sai de y=200 e acerta o telhado (medido: -59,8 m num ponto
+   valido); o segundo acerta a laje que passa a menos de 2 m sobre a cabeca
+   (medido: -1,37 m). Saia de `olho + 0,10 m`. Mesma armadilha ja registrada
+   para a altitude do drone.
+4. **A trava de 5 s tem de ser conferida COLADA no fim da queda.** Conferida
+   depois da sequencia de fotos ela ja expirou sozinha, e o teste reprova uma
+   coisa que funciona.
+5. **`ai.spawnOnda()` na mao com a `Progressao` desligada nao povoa o campo.**
+   O censo terminava com 0 vivos e 735 draw calls — os mesmos do campo vazio.
+   Deixe a `Progressao` povoar; neutralize so o dano no jogador (`_die()` tira o
+   estado de 'jogando' e a IA inteira cai em patrulha — armadilha ja
+   registrada).
+6. **`display: none` no overlay muda o ritmo do rAF do navegador** (mediu
+   17,3 ms estaveis, pior que com o overlay). Nao serve para isolar custo de DOM.
+
+### 9. O que continua aquem
+
+- **A queda nao tem NADA de vermelho.** O HUD e escondido no primeiro quadro
+  (comportamento antigo, preservado) e o veu de sangue so chega com a tela. Um
+  esmaecimento de `.sangria` entrando nos ultimos 40% da queda seria o passo
+  obvio, e mexe em CSS de UI e na interacao com `_travarMorte`.
+- **O chao a 0,52 m sai borrado** no quadro final — textura em angulo rasante
+  sem anisotropia, nao desfoque de profundidade. Nao da para consertar daqui.
+- **A queda nao reage ao TIPO de morte**: cair de granada, de queda ou de rajada
+  a queima-roupa produz exatamente a mesma tombada.
+- **`ctx.time.scale` nao afeta o audio.** O tiro que matou continua decaindo em
+  tempo normal enquanto a imagem esta a 42%. Um `playbackRate` na cauda daria o
+  efeito completo de camera lenta.

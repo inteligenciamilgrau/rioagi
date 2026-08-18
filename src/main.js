@@ -9,6 +9,7 @@ import { EventBus } from './core/EventBus.js';
 import { Settings } from './core/Settings.js';
 import { Input } from './core/Input.js';
 import { Engine } from './core/Engine.js';
+import { aquecerCena } from './core/Aquecimento.js';
 import { PostFX } from './core/PostFX.js';
 import { Sky } from './core/Sky.js';
 import { Lighting } from './core/Lighting.js';
@@ -139,6 +140,14 @@ class Game {
       for (const s of this.systems) s.setQuality?.(preset);
       ctx.engine.setQuality?.(preset);
     });
+
+    /* Pre-aquecimento de shader. TEM de ser aqui, no fim do boot: a chave de
+     * cache do programa inclui tonemap e espaco de cor do ALVO, e os dois so
+     * assumem o valor definitivo depois que o PostFX existe. Aquecer antes
+     * disso (ou antes de a IA criar hostil e drone) compila variante que o
+     * jogo nunca usa. Ver src/core/Aquecimento.js — mede-se com tools/pico.mjs. */
+    progress('Compilando shaders', 0.99);
+    ctx.debug.aquecimento = await aquecerCena(ctx);
 
     progress('Pronto', 1.0);
     ctx.bus.emit('boot:done', {});

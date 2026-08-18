@@ -30,7 +30,7 @@
  *    geometria" teria de ser escrito do zero de qualquer jeito.
  *
  * O que EU reaproveito dele, e esta anotado onde aparece: a gravidade
- * exagerada (`GRAVIDADE = -14.5`, com a mesma justificativa — 9,81 le como
+ * exagerada (`GRAVIDADE = 14.5`, com a mesma justificativa — 9,81 le como
  * camera lenta), o cache de altura de chao por celula, e a ideia de sanear
  * valor nao-finito antes de deixar propagar para a camera.
  *
@@ -43,14 +43,19 @@
  *     alpha = (3g / 2L) * sin(theta)
  *
  * So isso ja daria um poste caindo. O que faz ler como CORPO e o comprimento
- * encolher junto (`_comprimento`): o joelho cede, o tronco dobra, e o olho
- * chega ao chao a ~0,6 m de onde os pes estavam, nao a 1,7 m. Poste cai
- * inteiro; gente desaba.
+ * encolher junto (`comprimento`): o joelho cede, o tronco dobra, e o olho chega
+ * ao chao a ~0,7 m de onde os pes estavam, nao a 1,7 m. Poste cai inteiro;
+ * gente desaba.
  *
- * A camera e rigida na ponta da barra, entao a rotacao e UMA so — um
- * quaternion em torno do eixo `cross(dirQueda, cima)`. Nao ha decomposicao em
- * pitch e roll: quem cai de lado ve o horizonte girar, quem cai para a frente
- * ve o chao subir, e a mistura sai certa sozinha para qualquer direcao.
+ * A camera e rigida na ponta da barra, entao a rotacao e UMA so — um quaternion
+ * em torno do eixo `cross(cima, dirQueda)` (a ORDEM importa; ver a nota em
+ * `_compor`). Nao ha decomposicao em pitch e roll: quem cai de lado ve o
+ * horizonte girar, quem cai para a frente ve o chao subir, e a mistura sai
+ * certa sozinha para qualquer direcao.
+ *
+ * A POSICAO, essa sim, e decomposta em alcance horizontal e altura — nao por
+ * gosto, mas porque so assim da para garantir que a camera nao entre em parede.
+ * Ver `_avancar`.
  */
 
 import * as THREE from 'three';
@@ -65,33 +70,54 @@ const GRAVIDADE = 14.5;
 const THETA0 = 0.10;          // rad — o corpo ja parte fora da vertical
 const OMEGA0 = 1.25;          // rad/s — o empurrao do tiro que derrubou
 const OMEGA0_SORTE = 0.55;    // variacao, para duas mortes nao serem iguais
-const THETA_FIM = 88 * DEG;   // deitado
+/* Angulo final. 90 seria o corpo perfeitamente deitado, e foi o primeiro
+ * valor. Trocado por 81 depois de olhar a foto: a 88 graus a camera fica
+ * paralela ao chao a 30 cm dele e o terreno ocupa dois tercos do quadro como
+ * uma mancha borrada — a tomada termina em textura de terra, nao em favela.
+ * A 81 o horizonte volta para dentro do quadro e da para VER onde se caiu, que
+ * e o ponto da cena. Nao e realismo: e a mesma licenca que o genero toma na
+ * camera de morte, e vale mais que os 9 graus. */
+const THETA_FIM = 81 * DEG;
 const OMEGA_MAX = 7.0;        // teto: sem ele a barra chicoteia no fim
 
-/* Encolhimento do corpo ao longo da queda. 0,38 = o olho termina a ~0,64 m do
- * pe (1,68 x 0,38), que e a altura de uma cabeca deitada de lado. */
-const ENCOLHE_ATE = 0.38;
+/* Encolhimento do corpo ao longo da queda. 0,42 = o olho termina a ~0,71 m do
+ * pe (1,68 x 0,42), que e a altura de uma cabeca deitada de lado. */
+const ENCOLHE_ATE = 0.42;
 
 /* --- tempo (segundos de PAREDE, nao de simulacao) ------------------------ */
 /* ESCALA e o quanto o tempo desacelera. Escolhida medindo (tools/queda.mjs):
- * com 0,42 a queda inteira leva ~1,25 s de relogio de parede. Mais lento que
- * isso e a tomada passa de dramatica a arrastada — e quem ja perdeu dez vezes
- * quer que acabe. Mais rapido e o beat nao existe: a 1,0 a queda dura 0,5 s e
- * o jogador nem registra que caiu. */
+ * com 0,42 a queda inteira leva 1,34 s de relogio de parede, medidos, e a tela
+ * final entra logo depois — o jogador chega no primeiro clique em ~6,3 s
+ * (1,3 de queda + a trava de 5 s que ja existia), contra 5,9 s antes.
+ *
+ * Mais lento que isso e a tomada passa de dramatica a arrastada, e quem ja
+ * perdeu dez vezes quer que acabe. Mais rapido e o beat nao existe: sem escala
+ * nenhuma a queda dura 0,56 s e o jogador nao registra que caiu — a tela
+ * aparece antes de ele entender por que a imagem virou. */
 const ESCALA = 0.42;
 const RAMPA = 0.09;           // s de parede para o tempo desacelerar de 1 a ESCALA
 const POUSO = 0.20;           // s de parede segurando a imagem no chao
 const DUR_MAX = 1.60;         // s de parede — teto duro, aconteca o que acontecer
 
 /* --- geometria e colisao ------------------------------------------------- */
-const RAIO_OLHO = 0.30;       // a camera e uma esfera deste raio para a colisao
-const FOLGA_CHAO = 0.24;      // o olho nunca encosta no chao
+/* A camera e tratada como uma esfera deste raio. Ele faz dois trabalhos ao
+ * mesmo tempo: e a folga minima ate qualquer geometria (depenetracao) e, na
+ * pratica, a altura em que o olho para sobre o chao — por isso 0,34 e nao
+ * 0,15. Um olho a 15 cm do piso ve so terra desfocada. */
+const RAIO_OLHO = 0.34;
+/* Altura minima do olho sobre o PISO no fim da queda.
+ *
+ * Maior que o raio de colisao de proposito, e escolhida olhando a foto: a
+ * 0,34 m o terreno entra no campo proximo do desfoque de profundidade e a
+ * tomada termina numa mancha borrada ocupando meio quadro. A 0,52 m — a
+ * cabeca apoiada no ombro, nao esborrachada no chao — o chao sai do limiar de
+ * desfoque e o casario volta a ser legivel atras da tipografia. */
+const FOLGA_CHAO = 0.52;
 const ITER_DEPEN = 3;         // passadas de depenetracao por quadro
 
 /* Temporarios de modulo — nenhuma alocacao por quadro (regra 6 do contrato). */
 const _cima = new THREE.Vector3(0, 1, 0);
 const _eixo = new THREE.Vector3();
-const _dir = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _base = new THREE.Vector3();
@@ -142,7 +168,9 @@ export class QuedaMorte {
 
     this.fase = 'caindo';
     this.theta = THETA0;
-    this.omega = OMEGA0 + Math.random() * OMEGA0_SORTE;
+    // `determinista` existe para as ferramentas de captura: duas mortes
+    // seguidas tem de sair iguais para virarem uma sequencia comparavel.
+    this.omega = OMEGA0 + (this.determinista ? 0 : Math.random() * OMEGA0_SORTE);
     this.tParede = 0;
     this.tPouso = 0;
     this._bateu = false;
@@ -185,7 +213,7 @@ export class QuedaMorte {
 
     // Lado sorteado, mas enviesado pela bala: levar tiro pela direita joga o
     // corpo para a esquerda.
-    let lado = Math.random() < 0.5 ? 1 : -1;
+    let lado = (this.determinista || Math.random() < 0.5) ? 1 : -1;
     if (fromDir && Number.isFinite(fromDir.x + fromDir.z)) {
       const l = fromDir.x * direita.x + fromDir.z * direita.z;
       if (Math.abs(l) > 0.25) lado = l > 0 ? 1 : -1;
@@ -281,35 +309,56 @@ export class QuedaMorte {
     this.comprimento = L0 * (1 - (1 - ENCOLHE_ATE) * t * t);
 
     /* Rotacao: UM quaternion em torno do eixo horizontal perpendicular a
-     * direcao da queda. `cross(dirQueda, cima)` e o eixo que leva `cima` na
-     * direcao de `dirQueda` — a barra tomba justamente para la. */
-    _eixo.crossVectors(this.dirQueda, _cima);
+     * direcao da queda.
+     *
+     * O EIXO E `cima x dirQueda`, NAO `dirQueda x cima` — a ordem importa e
+     * errei nela na primeira versao. Por Rodrigues, com `a = cima x dirQueda`
+     * e `v = cima`, tem-se `a x v = dirQueda` e portanto
+     * `v' = cima*cos(t) + dirQueda*sin(t)`: o topo tomba PARA a direcao
+     * escolhida. Com a ordem trocada da `-dirQueda`, e o corpo cai exatamente
+     * para o lado oposto — na foto, o jogador tombava de costas e a tomada
+     * terminava de cara para o ceu (shots/queda/02-t180ms.png, antes). */
+    _eixo.crossVectors(_cima, this.dirQueda);
     if (_eixo.lengthSq() < 1e-9) _eixo.set(1, 0, 0); else _eixo.normalize();
     _q.setFromAxisAngle(_eixo, this.theta);
 
-    /* Base: guinada preservada; a inclinacao vai para um pouco abaixo do
-     * horizonte ao longo da queda. Sem isso, quem morresse olhando para cima
-     * terminava a tomada de cara para o ceu. */
-    const pitch = this.pitchBase + (-6 * DEG - this.pitchBase) * t;
+    /* Base: guinada preservada; a inclinacao converge para um valor unico ao
+     * longo da queda, senao quem morresse olhando para cima terminaria a
+     * tomada de cara para o ceu e quem morresse olhando para o chao veria so
+     * terra.
+     *
+     * O alvo e +7 graus (acima do horizonte), nao 0 nem negativo: com o olho a
+     * 34 cm do chao e a camera deitada, qualquer inclinacao para baixo enche o
+     * quadro de terra desfocada. Sete graus para cima trazem o casario de
+     * volta para dentro do enquadramento — da para VER onde se caiu. */
+    const pitch = this.pitchBase + (7 * DEG - this.pitchBase) * t;
     _e.set(pitch, this.yawBase, 0, 'YXZ');
     _qBase.setFromEuler(_e);
     cam.quaternion.copy(_q).multiply(_qBase);
 
-    /* Posicao: pe + barra girada. Os pes vem do `Movement`, que continua
-     * rodando — se o jogador morreu no ar, o corpo cai junto com a capsula. */
+    /* Posicao: pe + barra girada, decomposta em ALCANCE HORIZONTAL e ALTURA.
+     *
+     * A decomposicao existe por causa da colisao. O ponto de partida — o eixo
+     * da capsula do jogador — e o unico ponto do mundo que se sabe LIVRE de
+     * graca: o `Movement` mantem a capsula fora de geometria a cada quadro, e
+     * o eixo dela e a linha medial desse volume. Entao o alcance horizontal e
+     * medido A PARTIR DALI com um `sphereCast`, e a camera nunca chega a
+     * entrar em parede — em vez de entrar e ser resgatada depois. */
     _base.copy(this.player.movement.position);
-    _dir.set(0, this.comprimento, 0).applyQuaternion(_q);
-    this.olho.copy(_base).add(_dir);
+    const offH = this.comprimento * Math.sin(this.theta);
+    const offV = this.comprimento * Math.cos(this.theta);
 
-    /* O tremor que o rig ja produziu (shake do tiro que matou, dip de
-     * aterrissagem) entra amortecido: um corpo caindo nao faz bob de passo,
-     * mas o baque tem de chegar na imagem. */
+    /* Tremor que o rig ja produziu (shake do tiro que matou, dip de
+     * aterrissagem), amortecido: um corpo caindo nao faz bob de passo, mas o
+     * baque tem de chegar na imagem. */
     _offset.copy(rig.worldPosition).sub(_base);
     _offset.y -= L0;
-    if (Number.isFinite(_offset.x + _offset.y + _offset.z)) {
-      this.olho.addScaledVector(_offset, 0.35);
-    }
+    if (!Number.isFinite(_offset.x + _offset.y + _offset.z)) _offset.set(0, 0, 0);
+    _offset.multiplyScalar(0.35);
 
+    const olhoY = _base.y + offV + _offset.y;
+    this.olho.set(_base.x + _offset.x, olhoY, _base.z + _offset.z);
+    this._avancar(offH);
     this._manterForaDaGeometria();
 
     if (!Number.isFinite(this.olho.x + this.olho.y + this.olho.z)) {
@@ -327,20 +376,43 @@ export class QuedaMorte {
   }
 
   /**
-   * A camera nao pode terminar dentro de parede nem atravessar o chao.
+   * Avanca o olho `dist` metros na direcao da queda, PARANDO em parede.
    *
-   * Duas defesas, e as duas foram necessarias (ver tools/queda.mjs):
+   * Esta e a defesa principal, e a razao de ela vir antes das outras: o olho
+   * parte do eixo da capsula do jogador, que o `Movement` garante livre, e
+   * caminha dali com uma esfera de `RAIO_OLHO`. Um `sphereCast` que para no
+   * primeiro contato NUNCA deixa a camera entrar — e um problema diferente
+   * (e muito mais facil) do que tirar a camera de dentro depois que entrou.
+   *
+   * A versao anterior nao tinha esta etapa: punha o olho na ponta da barra e
+   * confiava so na depenetracao. Falhou em 1 de 40 quedas medidas, com a
+   * camera a 0,011 m de uma face — a depenetracao nao acha superficie quando
+   * o ponto ja esta mais fundo que o raio de busca.
+   */
+  _avancar(dist) {
+    if (dist <= 1e-4) return;
+    const col = this.ctx.world?.collision;
+    let d = dist;
+    if (col?.sphereCast) {
+      const r = col.sphereCast(this.olho, this.dirQueda, RAIO_OLHO, dist);
+      if (r?.hit) d = Math.max(0, r.distance - 0.02);
+    }
+    this.olho.addScaledVector(this.dirQueda, d);
+  }
+
+  /**
+   * Piso e depenetracao — as duas defesas que sobram depois do `_avancar`.
    *
    *  1. **Piso.** Raycast vertical com cache por celula de 0,5 m (mesma ideia
-   *     do `Ragdoll._colidir`, pelo mesmo motivo: um raycast por quadro por
-   *     ponto seria caro e o chao nao muda). O olho nunca desce abaixo de
+   *     do `Ragdoll._colidir`, pelo mesmo motivo: um raycast por quadro seria
+   *     caro e o chao nao muda). O olho nunca desce abaixo de
    *     `chao + FOLGA_CHAO`.
    *  2. **Depenetracao por esfera.** `sphereCast` com `maxDist = 0` devolve o
-   *     ponto de geometria mais proximo dentro do raio; empurramos o olho para
-   *     fora ate ficar a `RAIO_OLHO` da superficie. E a mesma correcao que
-   *     resolveu o drone raspando muro (ver NOTES [AI]/drone secao 3): sonda
-   *     de repulsao sozinha nao basta quando o ponto esta QUASE parado
-   *     encostado na parede, que e exatamente o fim de uma queda.
+   *     ponto de geometria mais proximo dentro do raio; empurramos o olho ate
+   *     ficar a `RAIO_OLHO` da superficie. E a mesma correcao que resolveu o
+   *     drone raspando muro (ver NOTES [AI]/drone secao 3), e ela continua
+   *     necessaria porque o passo 1 pode SUBIR o olho para dentro de uma laje
+   *     baixa, que nenhum avanco horizontal previa.
    */
   _manterForaDaGeometria() {
     const col = this.ctx.world?.collision;

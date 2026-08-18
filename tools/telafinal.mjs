@@ -68,32 +68,36 @@ await page.evaluate(() => {
       d.sort((a, b) => a - b);
       return { med: d[d.length >> 1], p95: d[Math.min(d.length - 1, Math.floor(d.length * 0.95))], max: d[d.length - 1] };
     },
-    /** Enche o campo como numa onda de verdade: hostis vivos, corpos, particulas. */
-    async popular(n = 10) {
+    /**
+     * Enche o campo DEIXANDO O JOGO ENCHER.
+     *
+     * A primeira versao chamava `ai.spawnOnda()` na mao e desligava a
+     * `Progressao`. Nao funcionou: o censo terminava com "0 hostis vivos" e
+     * 735 draw calls — os mesmos do campo vazio. Media um campo vazio achando
+     * que media um cheio, que e o pior tipo de medicao. Aqui quem povoa e a
+     * `Progressao` de verdade, com o ritmo dela; so o dano no jogador e
+     * neutralizado, porque `Player._die()` tira o estado de 'jogando' e a IA
+     * inteira cai em patrulha (armadilha ja registrada em NOTES).
+     */
+    async popular(seg = 30) {
       const ctx = window.__game.ctx;
       ctx.state = 'jogando';
       ctx.player.alive = true; ctx.player.health = 100;
-      ctx.ai.reset?.();
-      ctx.ai.spawnAutomatico = false;
-      ctx.ai.spawnOnda?.(n, 10, 40);
-      // Deixa a IA andar e atirar por uns segundos: e assim que nascem corpos,
-      // decais, particulas e ragdolls — o estado real em que alguem morre.
+      ctx.hud.setVisible(true);
+      const danoOriginal = ctx.player.takeDamage.bind(ctx.player);
+      ctx.player.takeDamage = () => ctx.player.health;
+
       const t0 = performance.now();
-      while (performance.now() - t0 < 6000) {
+      while (performance.now() - t0 < seg * 1000) {
         await new Promise((r) => requestAnimationFrame(r));
       }
-      // Derruba metade: ragdoll e carcaca sao parte do custo do campo.
-      const vivos = (ctx.ai.pool ?? []).filter((e) => e?.ativo);
-      for (let i = 0; i < vivos.length >> 1; i++) {
-        ctx.ai.damageEnemy?.(vivos[i].id, 9999, { point: vivos[i].objeto3d?.position });
-      }
-      const t1 = performance.now();
-      while (performance.now() - t1 < 1200) {
-        await new Promise((r) => requestAnimationFrame(r));
-      }
+      ctx.player.takeDamage = danoOriginal;
       return {
         vivos: (ctx.ai.pool ?? []).filter((e) => e?.ativo).length,
         ragdolls: (ctx.ai.pool ?? []).filter((e) => e?.ragdoll?.ativo).length,
+        decais: ctx.fx?.decals?.usados ?? null,
+        draws: ctx.renderer.info.render.calls,
+        onda: ctx.progressao?.onda ?? null,
       };
     },
     /** Monta um cenario pelo nome. */
@@ -118,6 +122,14 @@ await page.evaluate(() => {
       ctx.menu.mostrar('morte');
       if (nome === 'morte') return;
       if (nome === 'morte-sem-sangria') { if (sangria) sangria.style.display = 'none'; return; }
+      /* A tela de morte COMO ERA ANTES: mesma marcacao, mesmo CSS, mesma cena,
+       * mas redesenhando todo quadro e com ceu/iluminacao rodando — que e
+       * exatamente o que 'pausado' faz hoje e o que 'morto' fazia antes.
+       *
+       * Este e o A/B honesto. Comparar o numero de hoje com o de uma execucao
+       * anterior nao vale: entre as duas medicoes outro agente somou
+       * pre-aquecimento de shader ao boot, e o lado 'jogando' mudou junto. */
+      if (nome === 'morte-como-antes') { ctx.state = 'pausado'; return; }
       if (nome === 'morte-sem-dom') { if (menuRoot) menuRoot.style.display = 'none'; return; }
       if (nome === 'morte-sem-3d') {
         this._renderOriginal = ctx.engine.render.bind(ctx.engine);
@@ -184,11 +196,13 @@ await page.screenshot({ path: 'shots/queda/_aquecimento.png' }).catch(() => {});
 console.log('');
 console.log('=== CAMPO VAZIO — ms por quadro (5 blocos x 45 quadros, alternados) ===');
 cabecalho();
-const r = await comparar(['jogando', 'morte', 'morte-sem-sangria', 'morte-sem-dom', 'morte-sem-3d']);
+const r = await comparar(['jogando', 'morte', 'morte-como-antes', 'morte-sem-sangria', 'morte-sem-3d']);
 linha('jogando (referencia)', r['jogando']);
-linha('TELA DE MORTE', r['morte'], '<-- o que o jogador sente');
+linha('TELA DE MORTE, COMO ERA', r['morte-como-antes'], '<-- o engasgo relatado');
+linha('TELA DE MORTE, agora', r['morte'],
+  `ganho ${(r['morte-como-antes'].med - r['morte'].med).toFixed(2)} ms na mediana, ` +
+  `${(r['morte-como-antes'].p95 - r['morte'].p95).toFixed(2)} no p95`);
 linha('morte sem .sangria', r['morte-sem-sangria'], `delta ${(r['morte'].med - r['morte-sem-sangria'].med).toFixed(2)}`);
-linha('morte sem NENHUM DOM', r['morte-sem-dom'], `custo do overlay: ${(r['morte'].med - r['morte-sem-dom'].med).toFixed(2)}`);
 linha('morte sem render 3D', r['morte-sem-3d'], `custo do 3D: ${(r['morte'].med - r['morte-sem-3d'].med).toFixed(2)}`);
 
 console.log('');
@@ -202,14 +216,16 @@ linha('menu sem grao nenhum', g['menu-sem-grao'], `delta ${(g['menu'].med - g['m
 // --------------------------------------------------------------------------
 // O caso REAL: ninguem morre em campo vazio. Enche a onda e mede de novo.
 // --------------------------------------------------------------------------
-const pop = await page.evaluate(() => window.__tf.popular(10));
+const pop = await page.evaluate(() => window.__tf.popular(30));
 console.log('');
-console.log(`=== CAMPO CHEIO (${pop.vivos} hostis vivos, ${pop.ragdolls} ragdolls) ===`);
+console.log(`=== CAMPO EM COMBATE (onda ${pop.onda}: ${pop.vivos} hostis vivos, ${pop.ragdolls} ragdolls, ${pop.decais} decais, ${pop.draws} draw calls) ===`);
 cabecalho();
-const c = await comparar(['jogando', 'morte', 'morte-sem-dom', 'morte-sem-3d'], 4, 45);
+const c = await comparar(['jogando', 'morte-como-antes', 'morte', 'morte-sem-3d'], 4, 45);
 linha('jogando (referencia)', c['jogando']);
-linha('TELA DE MORTE', c['morte'], '<-- o relato do usuario');
-linha('morte sem NENHUM DOM', c['morte-sem-dom'], `custo do overlay: ${(c['morte'].med - c['morte-sem-dom'].med).toFixed(2)}`);
+linha('TELA DE MORTE, COMO ERA', c['morte-como-antes'], '<-- o engasgo relatado');
+linha('TELA DE MORTE, agora', c['morte'],
+  `ganho ${(c['morte-como-antes'].med - c['morte'].med).toFixed(2)} ms na mediana, ` +
+  `${(c['morte-como-antes'].p95 - c['morte'].p95).toFixed(2)} no p95`);
 linha('morte sem render 3D', c['morte-sem-3d'], `custo do 3D: ${(c['morte'].med - c['morte-sem-3d'].med).toFixed(2)}`);
 
 // Censo do que continua vivo com o jogador morto.

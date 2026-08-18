@@ -66,11 +66,19 @@ await page.evaluate(() => {
     trilha: [],
     fim: null,
     _off: null,
-    /** Planta o jogador vivo num ponto de spawn e devolve onde ele ficou. */
-    plantar(i) {
+    /**
+     * Planta o jogador vivo num ponto de spawn e devolve onde ele ficou.
+     *
+     * `encostar` empurra o boneco contra a parede mais proxima e o vira de
+     * cara para ela — e o caso ADVERSARIAL, o unico que interessa para a
+     * pergunta "a camera termina dentro de geometria". Morrer no meio da rua
+     * nao prova nada: a queda tem 0,64 m de alcance e ali sobra mundo.
+     */
+    plantar(i, encostar = false, yaw = null) {
       const pts = ctx.world.getSpawnPoints() ?? [];
       const s = pts[i % pts.length];
       const p = s.position ?? s;
+      const V = ctx.camera.position.constructor;
       ctx.menu.mostrar(null);
       ctx.state = 'jogando';
       ctx.player.queda.cancelar();
@@ -80,8 +88,45 @@ await page.evaluate(() => {
       ctx.hud.setVisible(true);
       ctx.player.movement.teleport(p.x, p.y + 0.1, p.z);
       ctx.player.movement.velocity.set(0, 0, 0);
-      ctx.player.rig.reset(Math.random() * Math.PI * 2, 0);
-      return { i, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2) };
+
+      let rumo = yaw ?? 0;
+      if (encostar) {
+        // Acha a parede mais proxima na altura do peito e cola nela.
+        const col = ctx.world.collision;
+        const o = new V(p.x, p.y + 1.1, p.z);
+        let melhor = null, melhorD = Infinity;
+        for (let a = 0; a < 24; a++) {
+          const th = (a / 24) * Math.PI * 2;
+          const d = new V(Math.sin(th), 0, Math.cos(th));
+          const r = col.raycast(o, d, 6);
+          if (r.hit && r.distance < melhorD) { melhorD = r.distance; melhor = { d, th }; }
+        }
+        if (melhor && melhorD < 6) {
+          const avanco = Math.max(0, melhorD - 0.45);
+          ctx.player.movement.teleport(
+            p.x + melhor.d.x * avanco, p.y + 0.1, p.z + melhor.d.z * avanco);
+          // yaw tal que a frente da camera, (-sin, 0, -cos), aponte para a parede
+          rumo = Math.atan2(-melhor.d.x, -melhor.d.z);
+        } else {
+          rumo = Math.random() * Math.PI * 2;
+        }
+      } else if (yaw === 'melhor') {
+        /* O rumo que o proprio jogo escolheria ao renascer ali (o leque de
+         * `Player._rumoInicial`, que pontua casario contra mato e vazio).
+         * Para a sequencia de fotos isso importa: um spawn de crista pelada
+         * enquadra so terra, e a tomada e julgada pelo lugar, nao pela queda. */
+        rumo = ctx.player._rumoInicial(ctx.player.movement.position);
+      } else if (yaw === null) {
+        rumo = Math.random() * Math.PI * 2;
+      }
+      ctx.player.rig.reset(rumo, 0);
+      ctx.player.rig.update(0.016, { position: ctx.player.movement.position, eyeHeight: 1.68 });
+      return {
+        i, encostada: encostar,
+        x: +ctx.player.movement.position.x.toFixed(2),
+        y: +ctx.player.movement.position.y.toFixed(2),
+        z: +ctx.player.movement.position.z.toFixed(2),
+      };
     },
     /** Mata e comeca a gravar. NAO espera: quem espera e o Node (o rAF roda la fora). */
     matar() {
@@ -108,38 +153,70 @@ await page.evaluate(() => {
       requestAnimationFrame(amostra);
     },
     /**
-     * A camera terminou dentro de geometria?
+     * A camera terminou DENTRO de geometria?
      *
-     * Duas provas independentes, porque uma so mente:
-     *  - `sphereCast` com maxDist 0 num raio de 0,30 m: ha superficie encostando?
-     *  - leque de 14 raios curtos: o ponto mais proximo em qualquer direcao.
-     * Um ponto DENTRO de um solido tem geometria em todas as direcoes; um ponto
-     * legitimamente colado numa parede tem parede de um lado so.
+     * O CRITERIO CERTO NAO E "ha superficie perto".
+     *
+     * A primeira versao desta funcao usou `sphereCast(p, dir, 0.30, 0)` e
+     * reprovou 6 de 6 pontos — todos com a superficie a 0,30 m exatos. Era o
+     * instrumento medindo a propria correcao: a depenetracao POE o olho a
+     * `RAIO_OLHO` da geometria mais proxima, entao "ha algo dentro de 0,30 m"
+     * e verdade por construcao em toda queda que termina no chao. Aquilo nao
+     * media penetracao, media contato.
+     *
+     * O criterio que separa os dois casos e a ENVOLTURA: um ponto dentro de um
+     * solido tem geometria a curta distancia em TODAS as direcoes (o raio sai
+     * pela face de saida); um ponto legitimamente deitado no chao, ou encostado
+     * numa parede, tem geometria em uma ou duas direcoes e ceu no resto.
+     * Entao: leque de 26 direcoes (12 no plano, 8 diagonais, 6 nos eixos), e
+     * conta-se quantas batem a menos de `PERTO`.
      */
     auditar() {
       const col = ctx.world.collision;
       const V = ctx.camera.position.constructor;
       const p = ctx.camera.position;
-      const sc = col.sphereCast(p, new V(0, 1, 0), 0.30, 0);
+      const PERTO = 0.26;              // abaixo do raio de seguranca de 0,30
+
       const dirs = [];
       for (let a = 0; a < 12; a++) {
         const th = (a / 12) * Math.PI * 2;
         dirs.push(new V(Math.cos(th), 0, Math.sin(th)));
       }
-      dirs.push(new V(0, 1, 0), new V(0, -1, 0));
-      let batidos = 0, minDist = Infinity;
-      for (const d of dirs) {
-        const r = col.raycast(p, d, 1.2);
-        if (r.hit) { batidos++; minDist = Math.min(minDist, r.distance); }
+      for (const sy of [1, -1]) {
+        for (let a = 0; a < 4; a++) {
+          const th = (a / 4) * Math.PI * 2 + Math.PI / 4;
+          dirs.push(new V(Math.cos(th) * 0.7071, sy * 0.7071, Math.sin(th) * 0.7071));
+        }
       }
-      const chao = col.groundAt(p.x, p.z);
+      dirs.push(new V(0, 1, 0), new V(0, -1, 0));
+
+      let curtos = 0, minDist = Infinity;
+      for (const d of dirs) {
+        const r = col.raycast(p, d, 2.0);
+        if (!r.hit) continue;
+        minDist = Math.min(minDist, r.distance);
+        if (r.distance < PERTO) curtos++;
+      }
+      const sc = col.sphereCast(p, new V(0, 1, 0), 0.30, 0);
+      /* Altura sobre o piso: sonda LOCAL, saindo de LOGO acima do olho.
+       *
+       * Duas versoes erradas antes desta, e as duas pelo mesmo motivo — o raio
+       * achou TETO em vez de piso:
+       *  - `groundAt` sai de y=200 e acerta o telhado quando a camera esta
+       *    dentro de casa (medido: -59,8 m num ponto perfeitamente valido);
+       *  - sair de `olho + 2,0 m` acerta a laje ou o beiral que passa a menos
+       *    de 2 m sobre a cabeca (medido: -1,37 m em dois pontos).
+       * De `olho + 0,10 m` nao ha o que acertar acima. E a mesma armadilha ja
+       * registrada em NOTES para a altitude do drone. */
+      const rc = col.raycast(new V(p.x, p.y + 0.10, p.z), new V(0, -1, 0), 6);
+      const chao = rc.hit ? rc.point.y : -Infinity;
+      const alturaChao = rc.hit ? p.y - rc.point.y : null;
       return {
         x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2),
-        penetrando: !!sc.hit,
-        folgaEsfera: sc.hit ? +Math.max(0, p.distanceTo(sc.point)).toFixed(3) : null,
-        raiosBatidos: batidos, deQuantos: dirs.length,
+        curtos, deQuantos: dirs.length,
         maisProximo: minDist === Infinity ? null : +minDist.toFixed(3),
-        acimaDoChao: chao === -Infinity ? null : +(p.y - chao).toFixed(3),
+        contato: sc.hit ? +p.distanceTo(sc.point).toFixed(3) : null,
+        acimaDoChao: alturaChao === null ? null : +alturaChao.toFixed(3),
       };
     },
   };
@@ -156,20 +233,68 @@ await page.screenshot({ path: `${OUT}/_aquecimento.png` });
 console.log('');
 console.log('=== a queda, quadro a quadro ===');
 
-const spawnFoto = 7;
-await page.evaluate((i) => window.__q.plantar(i), spawnFoto);
+/* UMA MORTE POR CAPTURA, de proposito.
+ *
+ * A primeira versao matava uma vez e tirava as nove fotos em sequencia com
+ * `waitForTimeout(marco - anterior)`. Nao vale: `page.screenshot()` leva de
+ * 200 a 600 ms com swiftshader, e esse tempo NAO entrava na conta — o quadro
+ * rotulado "t=180 ms" era na verdade o de ~1 s, com o corpo ja no chao. A
+ * sequencia inteira mentia sobre o proprio eixo do tempo.
+ *
+ * Aqui cada marco e uma morte nova: planta no MESMO ponto, com o MESMO rumo,
+ * mata, espera o marco e fotografa uma vez so. Com `queda.determinista` a
+ * queda e reproduzivel (mesma direcao, mesmo empurrao inicial), entao as nove
+ * fotos formam de fato uma sequencia. */
+/* O ponto da sequencia de fotos NAO e escolhido a dedo.
+ *
+ * A primeira versao fixou o spawn 7 e a tomada saiu enquadrando so barranco de
+ * terra — o julgamento "a queda emociona?" virou julgamento do lugar. Aqui
+ * pedimos ao proprio jogo: `Player._avaliarPonto` e a mesma nota que o
+ * `respawn()` usa para nao devolver o jogador de cara no mato, entao o ponto
+ * escolhido e representativo de onde o jogador de fato renasce. */
+const spawnFoto = await page.evaluate(() => {
+  const ctx = window.__game.ctx;
+  const pts = ctx.world.getSpawnPoints() ?? [];
+  let melhor = 0, nota = -Infinity;
+  for (let i = 0; i < Math.min(pts.length, 60); i++) {
+    const p = pts[i].position ?? pts[i];
+    const n = ctx.player._avaliarPonto(p).nota;
+    if (n > nota) { nota = n; melhor = i; }
+  }
+  return melhor;
+});
+const yawFoto = 'melhor';
+console.log(`  (sequencia fotografada no spawn ${spawnFoto}, o de melhor vista entre 60)`);
+await page.evaluate(() => { window.__game.ctx.player.queda.determinista = true; });
+
+await page.evaluate(([i, y]) => window.__q.plantar(i, false, y), [spawnFoto, yawFoto]);
 await page.waitForTimeout(700);
 await page.screenshot({ path: `${OUT}/00-vivo.png` });
 
-await page.evaluate(() => window.__q.matar());
-// Capturas em tempo de PAREDE, cobrindo o arco inteiro da queda.
-const marcos = [90, 180, 270, 360, 470, 620, 900, 1500, 3000];
-let anterior = 0;
+const marcos = [80, 160, 260, 380, 520, 700, 900, 1150, 1500, 2400];
 for (let k = 0; k < marcos.length; k++) {
-  await page.waitForTimeout(marcos[k] - anterior);
-  anterior = marcos[k];
+  await page.evaluate(([i, y]) => window.__q.plantar(i, false, y), [spawnFoto, yawFoto]);
+  await page.waitForTimeout(320);
+  await page.evaluate(() => window.__q.matar());
+  await page.waitForTimeout(marcos[k]);
   await page.screenshot({ path: `${OUT}/${String(k + 1).padStart(2, '0')}-t${marcos[k]}ms.png` });
 }
+
+// A ultima morte fica de pe para o cronometro (a de 2400 ms ja terminou).
+await page.evaluate(([i, y]) => window.__q.plantar(i, false, y), [spawnFoto, yawFoto]);
+await page.waitForTimeout(320);
+await page.evaluate(() => window.__q.matar());
+await page.waitForTimeout(1900);
+
+// A trava de 5 s tem de ser conferida AGORA, colada no fim da queda: mais
+// tarde ela expira sozinha e o teste reprovaria uma coisa que funciona.
+const trava = await page.evaluate(() => ({
+  telaAtual: window.__game.ctx.menu.telaAtual,
+  travada: document.getElementById('tela-morte')?.classList.contains('travada'),
+  botoesTravados: [...document.querySelectorAll('#tela-morte .bt')].every((b) => b.disabled),
+  cursorEscondido: getComputedStyle(document.getElementById('tela-morte')).cursor === 'none',
+}));
+await page.screenshot({ path: `${OUT}/20-tela-de-morte.png` });
 
 const cron = await page.evaluate(() => {
   const t = window.__q.trilha;
@@ -184,14 +309,11 @@ const cron = await page.evaluate(() => {
     quadrosCaindo: iCaindo.length,
     escalaMin: +escalaMin.toFixed(3),
     quedaDoOlho: +(y0 - yMin).toFixed(2),
-    telaAtual: ctx.menu.telaAtual,
     estado: ctx.state,
     escalaAgora: ctx.time.scale,
-    travada: document.getElementById('tela-morte')?.classList.contains('travada'),
-    botoesTravados: [...document.querySelectorAll('#tela-morte .bt')].every((b) => b.disabled),
   };
 });
-console.log(JSON.stringify(cron, null, 2));
+console.log(JSON.stringify({ ...cron, ...trava }, null, 2));
 
 console.log('');
 checa('a queda dura entre 0,8 s e 1,8 s de parede',
@@ -202,43 +324,106 @@ checa('a escala voltou a 1 no fim', Math.abs(cron.escalaAgora - 1) < 1e-6, Strin
 checa('o olho desceu pelo menos 0,8 m', cron.quedaDoOlho >= 0.8, cron.quedaDoOlho + ' m');
 checa('a camera se moveu em MUITOS quadros (nao foi um corte)', cron.quadrosCaindo >= 25,
   cron.quadrosCaindo + ' quadros de queda');
-checa('a tela de morte so entrou DEPOIS', cron.telaAtual === 'morte');
+checa('a tela de morte so entrou DEPOIS da queda', trava.telaAtual === 'morte');
 checa('a trava de 5 s continua sendo a dona da espera',
-  cron.travada === true && cron.botoesTravados === true);
+  trava.travada === true && trava.botoesTravados === true);
+checa('o cursor segue escondido durante a trava', trava.cursorEscondido === true);
+
+/* ====================================================================== *
+ * 1b. A VOLTA: cair, apertar "Tentar de novo", jogar de novo
+ * ====================================================================== *
+ * A encenacao mexe em `ctx.state` e em `ctx.time.scale`, e as duas coisas
+ * ficariam presas se alguem esquecesse de desfazer. Escala presa em 0,42 e o
+ * pior defeito possivel aqui: o jogo inteiro passaria a rodar a 42% da
+ * velocidade e ninguem ligaria a causa a tela de morte.
+ */
+console.log('');
+console.log('=== a volta: morrer, reiniciar, morrer de novo ===');
+await page.waitForTimeout(5200);                 // deixa a trava de 5 s liberar
+const volta = await page.evaluate(() => {
+  const ctx = window.__game.ctx;
+  ctx.menu._acao('reiniciar');
+  return { estado: ctx.state, escala: ctx.time.scale, vivo: ctx.player.alive, tela: ctx.menu.telaAtual };
+});
+await page.waitForTimeout(700);
+const voltaDepois = await page.evaluate(() => {
+  const ctx = window.__game.ctx;
+  const antes = ctx.time.frame;
+  return new Promise((res) => setTimeout(() => res({
+    quadros: ctx.time.frame - antes,
+    escala: ctx.time.scale,
+    estado: ctx.state,
+    vida: ctx.player.health,
+    quedaAtiva: ctx.player.queda.ativa,
+    armaVisivel: ctx.player.viewModel.quedaT,
+  }), 500));
+});
+checa('reiniciar volta para jogando', volta.estado === 'jogando', volta.estado);
+checa('a escala de tempo volta a 1', voltaDepois.escala === 1, String(voltaDepois.escala));
+checa('o jogador esta vivo e inteiro', voltaDepois.vida === 100 && volta.vivo === true);
+checa('a encenacao foi cancelada', voltaDepois.quedaAtiva === false);
+checa('a arma voltou para a mao', voltaDepois.armaVisivel === 0, String(voltaDepois.armaVisivel));
+checa('o laco voltou a rodar a 60 Hz', voltaDepois.quadros >= 20, voltaDepois.quadros + ' quadros em 0,5 s');
+
+// E morre de novo: a segunda encenacao tem de acontecer igual a primeira.
+await page.evaluate(() => window.__q.matar());
+await page.waitForTimeout(1900);
+const segunda = await page.evaluate(() => ({
+  fim: window.__q.fim, tela: window.__game.ctx.menu.telaAtual,
+  travada: document.getElementById('tela-morte')?.classList.contains('travada'),
+}));
+checa('a segunda morte tambem encena', segunda.fim && segunda.fim.parede > 0.8,
+  segunda.fim ? segunda.fim.parede.toFixed(2) + ' s' : 'nao encenou');
+checa('e a tela volta travada', segunda.tela === 'morte' && segunda.travada === true);
 
 /* ====================================================================== *
  * 2. A camera nao termina dentro de geometria — em varios pontos do mapa
  * ====================================================================== */
-const N = Number(process.env.PONTOS ?? 24);
+const N = Number(process.env.PONTOS ?? 20);
 console.log('');
-console.log(`=== fim da queda em ${N} pontos do mapa: a camera esta dentro de geometria? ===`);
-console.log('  ponto  ------ posicao final ------  penetra  raios  maisProx  acimaDoChao');
+console.log(`=== fim da queda em ${N * 2} quedas (${N} pontos, cada um no aberto e ENCOSTADO na parede) ===`);
+console.log('  Criterio de "dentro": mais de 8 das 26 direcoes com geometria a menos de 0,26 m.');
+console.log('');
+console.log('  ponto  onde        ---- posicao final ----   curtos/26  maisProx  contato  acimaChao');
 
+await page.evaluate(() => { window.__game.ctx.player.queda.determinista = false; });
 const ruins = [];
 const tabela = [];
+let foto = 0;
 for (let i = 0; i < N; i++) {
-  const onde = await page.evaluate((k) => window.__q.plantar(k * 3 + 1), i);
-  await page.waitForTimeout(260);
-  await page.evaluate(() => window.__q.matar());
-  await page.waitForTimeout(2100);
-  const a = await page.evaluate(() => window.__q.auditar());
-  tabela.push({ ...a, spawn: onde.i });
-  const dentro = a.penetrando || (a.raiosBatidos >= 12);
-  if (dentro) ruins.push({ ...a, spawn: onde.i });
-  console.log(
-    `  ${String(i).padStart(5)}  ${String(a.x).padStart(8)} ${String(a.y).padStart(7)} ${String(a.z).padStart(8)}` +
-    `  ${(a.penetrando ? 'SIM' : 'nao').padStart(7)}  ${String(a.raiosBatidos + '/' + a.deQuantos).padStart(5)}` +
-    `  ${String(a.maisProximo ?? '-').padStart(8)}  ${String(a.acimaDoChao ?? '-').padStart(11)}`);
-  if (i < 4) await page.screenshot({ path: `${OUT}/fim-${String(i).padStart(2, '0')}.png` });
+  for (const encostar of [false, true]) {
+    const onde = await page.evaluate(
+      ([k, e]) => window.__q.plantar(k * 3 + 1, e), [i, encostar]);
+    await page.waitForTimeout(300);
+    await page.evaluate(() => window.__q.matar());
+    await page.waitForTimeout(2000);
+    const a = await page.evaluate(() => window.__q.auditar());
+    const reg = { ...a, spawn: onde.i, encostada: encostar };
+    tabela.push(reg);
+    if (a.curtos > 8) ruins.push(reg);
+    console.log(
+      `  ${String(i).padStart(5)}  ${(encostar ? 'na parede' : 'no aberto').padEnd(10)}` +
+      `  ${String(a.x).padStart(8)} ${String(a.y).padStart(7)} ${String(a.z).padStart(8)}` +
+      `  ${String(a.curtos).padStart(9)}  ${String(a.maisProximo ?? '-').padStart(8)}` +
+      `  ${String(a.contato ?? '-').padStart(7)}  ${String(a.acimaDoChao ?? '-').padStart(9)}`);
+    if (encostar && foto < 4) {
+      await page.screenshot({ path: `${OUT}/parede-${String(foto++).padStart(2, '0')}.png` });
+    }
+  }
 }
 
 const acimaOk = tabela.filter((a) => a.acimaDoChao !== null && a.acimaDoChao >= 0.15).length;
 const comChao = tabela.filter((a) => a.acimaDoChao !== null).length;
+const semFolga = tabela.filter((a) => a.maisProximo !== null && a.maisProximo < 0.20);
 console.log('');
 checa('nenhuma camera terminou DENTRO de geometria', ruins.length === 0,
-  ruins.length ? ruins.map((r) => `spawn ${r.spawn}`).join(', ') : `${N}/${N} livres`);
+  ruins.length ? ruins.map((r) => `spawn ${r.spawn}${r.encostada ? ' (parede)' : ''}`).join(', ')
+    : `${tabela.length}/${tabela.length} livres`);
 checa('nenhuma camera atravessou o chao', acimaOk === comChao,
   `${acimaOk}/${comChao} acima de 0,15 m do piso`);
+checa('sempre sobra pelo menos 0,20 m ate a geometria mais proxima', semFolga.length === 0,
+  semFolga.length ? `${semFolga.length} caso(s), o pior a ${Math.min(...semFolga.map((s) => s.maisProximo))} m`
+    : `pior caso ${Math.min(...tabela.filter((a) => a.maisProximo !== null).map((a) => a.maisProximo)).toFixed(3)} m`);
 
 await browser.close();
 vite.kill();
