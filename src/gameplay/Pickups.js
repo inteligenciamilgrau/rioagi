@@ -17,6 +17,11 @@ import * as THREE from 'three';
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
+const _origemChao = new THREE.Vector3();
+const _baixo = new THREE.Vector3(0, -1, 0);
+/* Quanto o item procura chao abaixo de si. Curto de proposito — ver
+ * `_assentarNoChao`. 4 m cobre corpo caido em degrau ou meia-parede. */
+const ALCANCE_ASSENTO = 4;
 
 /** Distância de coleta (m). Generosa: o jogador não deve ter de mirar no chão. */
 const RAIO_COLETA = 1.35;
@@ -241,6 +246,31 @@ export class Pickups {
    * @param {THREE.Vector3} pos ponto no chão
    * @param {boolean} fixo item de cenário (não expira)
    */
+  /**
+   * Altura do piso sob um ponto de drop.
+   *
+   * PORQUE ISTO EXISTE: o evento `enemy:killed` carrega `point`, que e o ponto
+   * onde a BALA ACERTOU — nao os pes do inimigo. Sem assentar, um tiro na cabeca
+   * deixava a municao boiando a 1,85 m do chao (medido em tools/drop.mjs), bem
+   * acima da linha de visao de quem chega olhando para baixo procurando item no
+   * chao. O jogador concluia que o inimigo nao tinha dropado nada.
+   *
+   * O raio parte de POUCO ACIMA do ponto e desce poucos metros, e nao de y=200
+   * como `groundAt`: dentro de casa, um raio vindo do alto acerta o TELHADO e
+   * assentaria o item no teto. Alcance curto tambem impede que um corpo caido
+   * numa laje mande o item para a rua, dois andares abaixo.
+   *
+   * @returns {number} Y do piso; o proprio ponto se nada for encontrado.
+   */
+  _assentarNoChao(pos) {
+    const col = this.ctx.world?.collision;
+    if (!col?.raycast) return pos.y;
+    _origemChao.set(pos.x, pos.y + 0.5, pos.z);
+    const r = col.raycast(_origemChao, _baixo, ALCANCE_ASSENTO);
+    // `r.point` e reaproveitado entre chamadas: leia o Y agora, nao guarde `r`.
+    return (r?.hit && Number.isFinite(r.point?.y)) ? r.point.y : pos.y;
+  }
+
   soltar(tipo, pos, fixo = false) {
     const d = DEF[tipo];
     if (!d) return null;
@@ -258,7 +288,7 @@ export class Pickups {
     slot.idade = 0;
     slot.fase = Math.random() * Math.PI * 2;
     slot.base.copy(pos);
-    slot.base.y += 0.13;              // meio caixote acima do chão
+    slot.base.y = this._assentarNoChao(pos) + 0.13;   // meio caixote acima do chão
 
     slot.mesh.geometry = this.geo[tipo];
     slot.mesh.material = this.mat[tipo];

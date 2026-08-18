@@ -21,6 +21,7 @@ const ACTION_KEYS = {
   reload:   ['KeyR'],
   use:      ['KeyF'],
   usarItem: ['KeyE'],
+  mapa:     ['Tab'],
   melee:    ['KeyV'],
   grenade:  ['KeyG'],
   swap:     ['KeyQ'],
@@ -58,12 +59,26 @@ export class Input {
 
   _bind() {
     const onKeyDown = (e) => {
-      if (e.repeat) return;
       // Nao sequestra atalhos do navegador com modificadores.
       if (e.ctrlKey && e.code !== 'ControlLeft') return;
+
+      /* preventDefault ANTES do early-return de `repeat`.
+       *
+       * Tecla SEGURADA dispara keydown repetidamente. Com o `return` do repeat
+       * vindo primeiro, so o PRIMEIRO evento era barrado e todos os repeticoes
+       * escapavam para o navegador. Para a maioria das teclas isso nao aparece,
+       * mas o Tab e navegacao por foco: segurar Tab para ver o mapa saia
+       * passeando o foco pela pagina e abrindo o que estivesse no caminho.
+       *
+       * O Tab e barrado mesmo SEM pointer lock, porque ele e acao do jogo
+       * (mapa) e porque o lock pode ter caido sem o jogador perceber — e ai o
+       * estrago acontece justamente quando ninguem espera. */
+      const nossa = e.code === 'Tab';
+      if (nossa || (this.locked && e.code !== 'Escape')) e.preventDefault();
+
+      if (e.repeat) return;
       this.keys.add(e.code);
       this._pressedThisFrame.add(e.code);
-      if (this.locked && e.code !== 'Escape') e.preventDefault();
     };
     const onKeyUp = (e) => {
       this.keys.delete(e.code);

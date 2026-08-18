@@ -478,3 +478,248 @@ para a rua, descida de telhado).
    filtro de superficie estreita mudaram os numeros em ~40%; os valores acima
    sao todos com a versao final da ferramenta, o "antes" medido num export do
    HEAD (`git archive`) para nao mexer na arvore de trabalho de outro agente.
+
+---
+
+## [AI] O hostil cego: instrumento furado, audicao ligada, vigia que varre, dificuldade medida
+
+O relato era "passeio 20 s na frente do adversario e ele nao atira, e pode
+aumentar a dificuldade". Sao duas coisas, e a primeira era defeito.
+
+### 0. O INSTRUMENTO ESTAVA FURADO — leia antes de acreditar em laudo anterior
+
+`tools/reacao.mjs` media o alvo ERRADO. `Perception` mira em
+`ctx.player.eyePosition`, que e `player.rig.worldPosition`, e esse vetor **so e
+escrito dentro de `CameraRig.update()`**, chamado por `Player.update()`. A
+ferramenta punha `ctx.state = 'jogando'` e rodava so `ai.update()` num laco
+sincrono dentro de um `page.evaluate` — e o laco de rAF fica BLOQUEADO durante
+um evaluate, entao `Player.update()` nunca rodava e `worldPosition` continuava
+em `(0, 0, 0)`.
+
+O hostil enxergava um fantasma na origem do mundo, que cai dentro do morro, a
+~72 m do jogador. Os tres numeros esquisitos do laudo anterior sao todos
+artefato disso:
+
+- `dist=71.8` "no primeiro quadro" nao era erro de `ai.spawn()`. **O spawn cai
+  exatamente onde se pede** — conferido cenario a cenario, desvio maximo
+  0,00 m. Era a distancia ate o fantasma.
+- `ang=66` com o hostil nascido olhando para o jogador: angulo ate o fantasma.
+- "nunca notou a 6 e 12 m": ele notava em 0,2 s quando de frente. So nao via
+  quem nao existia.
+- A varredura de olhar que "piorou as medicoes" foi julgada com esse
+  instrumento. **Aquela conclusao nao valia nem para condenar nem para absolver
+  a ideia.**
+
+**Se voce for medir qualquer coisa que dependa de onde o jogador esta, chame
+`ctx.player.update(dt)` no seu laco.** A ferramenta agora imprime um bloco
+`AFERICAO DO INSTRUMENTO` com pe, olho e altura do olho, e grita
+`OLHO NA ORIGEM: MEDICAO INVALIDA` se o olho cair em zero.
+
+Outras tres armadilhas pagas no mesmo arquivo, todas silenciosas:
+
+1. `for (e of pool) if (e.ativo) e.despawn()` **nao limpa `ai.vivos`** — o
+   hostil novo entrava duas vezes na lista e era atualizado duas vezes por
+   quadro (dt dobrado so para ele). Use `ai.reset()`.
+2. Com `ctx.state = 'jogando'` e `spawnAutomatico` ligado, o proprio
+   `ai.update()` fazia nascer ondas no meio da medicao — cinco hostis extras em
+   5 s, comendo as fichas de raycast de percepcao.
+3. **O jogador de teste morria e envenenava todas as celulas seguintes.**
+   `Perception` ignora alvo com `alive === false`, entao o laudo mostrava
+   "NUNCA notou" a 20 e 30 m e a culpa parecia ser da percepcao. Zerar a vida
+   entre celulas nao resolve (ele morre DENTRO da celula): agora `takeDamage`
+   vira um contador durante a medicao.
+
+### 1. Defeito medido: o hostil era SURDO e o olhar dele era de pedra
+
+Com o instrumento consertado, a percepcao nunca foi o problema — a imobilidade
+do olhar era. Sentinela parada, jogador em pe, a vista, visada livre, 25 s:
+
+| dist | de frente | de lado (90) | de costas (180) |
+|---|---|---|---|
+| 6 m | notou 0,2 s | **NUNCA** | **NUNCA** |
+| 12 m | notou 0,2 s | **NUNCA** | **NUNCA** |
+| 20 m | notou 0,2 s | **NUNCA** | **NUNCA** |
+| 30 m | notou 0,3 s | **NUNCA** | **NUNCA** |
+
+Consciencia final 0,00 nas oito celulas fora do cone. O cone tem 110 graus e
+**ninguem escrevia o `yaw` de um hostil parado**: 250 graus de arco cego
+permanente, para sempre.
+
+E `Perception.ouvir()` era **codigo morto**. O `ARCHITECTURE.md` lista
+`weapon:fire` como PLAYER -> AI desde sempre, mas nao havia um unico `bus.on`
+em `src/ai/`. Medido: jogador andando 68 m em 25 s a 12 m de um sentinela, 41
+passos audiveis, consciencia final do hostil **0,00**. E o relato do jogador,
+reproduzido em bancada.
+
+### 2. O que mudou, e por que estas escolhas e nao as outras
+
+- **`AIManager` ganhou ouvidos.** Assina `weapon:fire` (raio por arma: 70 m no
+  fuzil, 58 na SMG, 44 na pistola, 85 na AGLC) e `player:footstep` (22 m
+  correndo, 16 m andando, 5 m agachado). Usa o `Perception.ouvir()` que ja
+  existia, com atenuacao por parede e erro de posicao proporcional a distancia.
+  **Passo tem teto de consciencia em 0,85**: som sozinho leva a SUSPEITA, nunca
+  ao alerta — quem descobre de fato continua sendo quem enxerga. Tiro do
+  jogador pode chegar ao alerta (voce se denunciou) e e estrangulado a um
+  evento por 0,12 s: a 600 rpm seriam dez difusoes por segundo, cada uma com um
+  raycast de oclusao por hostil vivo.
+- **`Perception.ouvir()` mudou em duas linhas.** `forca` agora escala o salto
+  INTEIRO (antes so a parcela por distancia, e o piso de 0,30 valia igual para
+  fuzil e para bota); e ganhou `teto`, que nunca REBAIXA quem ja esta alerta.
+- **`Perception`: o decaimento agora espera silencio, nao so cegueira**
+  (`tempoSemVer > 1,4 && tempoDesdeSom > 1,4`). Sem a segunda metade a audicao
+  nao acumula: um caminhante a 12 m rende ~0,17 de consciencia por segundo
+  contra 0,26 de decaimento — o hostil ouvia os 40 passos e terminava zerado.
+- **`Enemy._vigiar()`: vigia parado gira o corpo para varrer o entorno.** Roda
+  no complemento exato de quem escreve `yawAlvo` (parado + inconsciente +
+  OCIOSO/PATRULHA), entao nao briga com `_mover` nem com `_apontar` — era essa
+  colisao que derrubava a tentativa anterior. O giro guarda um LADO e so o
+  troca em 22% das olhadas: sortear o lado toda vez e passeio aleatorio, demora
+  a fechar a volta e fica bailando no mesmo setor. O corpo gira com ganho 3,0
+  em vez dos 7 do combate, senao 90 graus saem em dois quadros e parece
+  teleporte de cabeca. **`spawn()` segura o rumo inicial por 0,5-2,0 s**: com
+  `_tVigia = 0` o hostil virava as costas no primeiro quadro e notar a 30 m de
+  frente ia de 0,3 s para 5,4 s.
+
+**Por que nao as outras opcoes:** cone maior quando parado nao resolve 180
+graus e 110 ja e generoso; "ponto de patrulha que nunca termina" nao ajuda um
+hostil que ESTA parado no posto (e a patrulha ja cicla com `%`); reagir a som
+era necessario mas nao suficiente sozinho, porque jogador parado ou agachado
+nao faz barulho nenhum. As duas juntas cobrem os dois casos.
+
+### 3. Resultado — mesmo instrumento nos dois lados (`tools/reacao.mjs`)
+
+Sentinela parada, jogador parado e em silencio. `notou / atirou`, em segundos:
+
+| dist | frente antes | frente depois | lado antes | lado depois | costas antes | costas depois |
+|---|---|---|---|---|---|---|
+| 6 m | 0,2 / 1,2 | 0,2 / 1,3 | NUNCA | 1,4 / 3,7 | NUNCA | 3,0 / 3,9 |
+| 12 m | 0,2 / 2,2 | 0,2 / 1,4 | NUNCA | 1,9 / 3,0 | NUNCA | 3,2 / 4,3 |
+| 20 m | 0,2 / 2,8 | 0,2 / 1,4 | NUNCA | 1,9 / 4,0 | NUNCA | 3,4 / 4,6 |
+| 30 m | 0,3 / 2,8 | 0,3 / 1,9 | NUNCA | 3,5 / 6,1 | NUNCA | 2,1 / 3,6 |
+
+Passeio a 12 m com o hostil de costas (o relato original): antes **NUNCA**, com
+40 passos e 68 m andados; depois notou entre 0,9 s e 13,3 s conforme a corrida.
+A varredura e aleatoria, entao a celula de fora do cone tem variancia de
+verdade — o pior caso observado em quatro corridas foi 6,9 s para notar.
+
+### 4. Dificuldade — onde subiu, e o que NAO era dificuldade
+
+A medicao de conjunto esta em **`tools/pressao.mjs`** (novo): jogador sintetico
+parado, tempo-para-matar fixo, 240 s, `Progressao` no comando. Ele nao anda e
+nao se abaixa de proposito — mede quanto a IA IMPOE, nao quanto um jogador
+aguenta. Leia queda como proxy de pressao, nao como dificuldade real.
+
+O achado grande nao foi numero de perfil: **o reforco nascia do outro lado do
+mapa.** `spawnOnda` tinha PISO de distancia e nenhum TETO. Censo do codigo
+antigo: `{"patrulha": 7}  d=[132,134,140,144]` — sete hostis patrulhando a
+130+ m enquanto o jogador estava parado no aberto, num mapa de 180 m. Eles
+ocupavam a vaga de vivo, a `Progressao` via o campo cheio e nao chamava mais
+ninguem: **37 tiros de IA em 240 s.**
+
+Somava-se a isso o SUSPEITO desistir cedo demais. Quem nasce avisado por
+`convergirNoJogador()` recebe consciencia 0,55, e 0,55 vira 0,05 em 3,3 s de
+decaimento: ele andava tres segundos na direcao do jogador e voltava a
+patrulhar, a 20 m do alvo.
+
+Mudancas, em ordem de impacto medido:
+
+1. **`spawnOnda(quantos, distMin, distMax)`** — `Progressao` pede a faixa
+   15-46 m, com uma segunda passada afrouxando o teto se a faixa nao render.
+2. **SUSPEITO investiga ate CHEGAR**, nao ate a barra secar: sai quando chegou
+   e olhou por 3 s, ou depois de 22 s (`SUSPEITA_MAX`). E anda em **trote
+   (3,3 m/s)**, nao no passeio de 2,1.
+3. **Teto de fogo simultaneo** — `AIManager.vagaDeFogo()` +
+   `Progressao.atiradoresDaOnda()`: 3 atiradores ate a onda 4, 4 ate a 10, 5
+   depois. Quem nao cabe FLANQUEIA. Este e o item de JUSTICA, nao de
+   dificuldade: sem ele o dano cresce linear com a densidade e oito fuzis a 7 m
+   matam qualquer um em menos de um segundo, sem jogada possivel. Medido: com
+   o teto, mesmo dano por minuto e **metade das quedas**. Mesma pressao,
+   distribuida no tempo. **Tem de ser checado em TODOS os caminhos que entram
+   em ATIRAR** — sao cinco (ALERTA, PERSEGUIR, COBERTURA sem ponto, FLANQUEAR,
+   RECARREGAR). Na primeira versao so dois estavam cobertos e o censo mostrou
+   cinco fuzis com teto de quatro. Use `Enemy._abrirFogo()`.
+4. **Perfis mais afiados** — so reacao e precisao; `dano` congelado nos tres:
+   facil 0,55-0,95 -> 0,48-0,86 s e erroMin 0,035 -> 0,032;
+   normal 0,32-0,62 -> 0,27-0,52 e 0,020 -> 0,017;
+   dificil 0,22-0,42 -> 0,18-0,34 e 0,011 -> 0,009;
+   o perfil "alem" da `Progressao`, 0,16-0,30 -> 0,13-0,24 e 0,007 -> 0,006.
+5. **Densidade e cadencia** — `simultaneosDaOnda` de `5 + 0,7n` para
+   `6 + 0,75n` (teto 12, igual); `intervaloReforco` de `max(3,5; 9 - 0,55n)`
+   para `max(3,0; 8,5 - 0,6n)`; cobertura mais curta (3,5-6,5 s em vez de
+   6-10 s); e ATIRAR -> FLANQUEAR em vez de COBERTURA quando ha companhia
+   engajada (`_temCompanhiaEngajada`), que e o que produz o segundo sujeito
+   chegando pela lateral.
+6. **`_livre()` recicla o corpo mais antigo** quando o pool esgota. Um corpo
+   segura a vaga por 26 s; com onda de 12 simultaneos, tres baixas seguidas
+   faziam o reforco parar justo no momento mais quente. Efeito colateral
+   aceito: em campo saturado o cadaver some antes dos 26 s.
+
+Resultado, mesmo instrumento nos dois lados (240 s, TTK 1,5 s):
+
+| | antes | depois (2 corridas) |
+|---|---|---|
+| dano recebido por minuto | 38 | 2306 · 2594 |
+| tiros da IA em 240 s | 37 | 1008 · 1085 |
+| acerto contra alvo parado | 49% | 87% · 90% |
+| quedas do boneco | 0 | 26 · 27 |
+| onda alcancada em 240 s | 4 | 8 · 7 |
+| abates do boneco | 25 | 70 · 66 |
+
+Por onda, na corrida final (quedas): 0, 2, 1, 3, 5, 7, 8 — a curva sobe, que e
+o pedido. A cauda das ondas 6-7 e amplificada pelo boneco cair, levantar no
+mesmo lugar e cair de novo; um humano teria andado.
+
+Convem saber que a variancia entre corridas e grande (rota de patrulha e ponto
+de spawn sao sorteados): compare ordem de grandeza, nao digito. A corrida
+intermediaria, antes da reciclagem de pool do item 6, deu 1135 de dano por
+minuto — a reciclagem sozinha vale quase o dobro de pressao nas ondas altas.
+
+### 5. O que os outros modulos precisam saber
+
+- **A AI passou a CONSUMIR `weapon:fire` e `player:footstep`.** PLAYER: se um
+  dia existir arma silenciada ou sola macia, o caminho e `RAIO_SOM` /
+  `RAIO_PASSO` no `AIManager`, nao um evento novo.
+- **`ai.maxAtiradores`** e publico e a `Progressao` escreve nele por onda. Quem
+  for mexer em ritmo de combate mexe ai primeiro, nao em precisao.
+- **`ai.spawnOnda` ganhou um terceiro argumento** (`distMax`, opcional).
+  Chamadas de dois argumentos seguem validas.
+- **Corpo pode sumir antes dos 26 s** quando o campo esta saturado. Se FX
+  depender do tempo de cadaver, saiba disso.
+- Nada mudou no contrato com UI/HUD. `Progressao.rotuloDificuldade` continua
+  igual.
+
+### 6. Ferramentas
+
+- `tools/reacao.mjs` — reescrita. Afere o proprio instrumento; mede sentinela
+  parada (4 distancias x 3 rumos), ronda natural e passeio real do jogador
+  (conduzido pelo `Player.update()`, com teclado injetado em `input.keys` e
+  giro por `input.mouseDX`).
+- `tools/pressao.mjs` (novo) — partida de 240 s com censo de estado e distancia
+  a cada 20 s. E o censo que responde ONDE o combate trava: ninguem nasce,
+  nascem e nao chegam, ou chegam e nao atiram.
+
+**Armadilhas destas duas, ja pagas:**
+1. `ctx.player.eyePosition` e `(0,0,0)` fora de partida (secao 0).
+2. `Player._die()` poe `ctx.state = 'morto'` e o `respawn()` NAO desfaz isso —
+   quem desfaz e o menu. Numa medicao longa, a primeira morte congela
+   `Progressao` e o repovoamento, e o resto da corrida roda com o campo vazio.
+3. Renascer o boneco de teste num ponto sorteado do mapa o teleporta para longe
+   do tiroteio (censo logo apos: hostis a 132, 141, 176 m); renascer no mesmo
+   ponto reencena a morte a cada quadro (82 quedas numa onda so). Levante no
+   lugar, com uma folga curta de invulnerabilidade, e conte o dano sempre.
+
+### 7. O que NAO foi resolvido
+
+- **Hostil ANDANDO nao varre o olhar.** `_vigiar` so roda parado, porque em
+  movimento quem manda em `yawAlvo` e o caminho. Uma varredura de cabeca
+  independente do corpo precisaria de um osso de pescoco dirigivel no
+  `Soldier`, e mexer nisso era mexer na pose de mira. Efeito pratico medido:
+  na tabela B (ronda natural), o hostil que anda para longe de um jogador
+  parado e em silencio ainda pode nao notar nada em 25 s a 20 m.
+- **A varredura e aleatoria, entao a cauda e longa.** Fora do cone, notar leva
+  de 1,4 s a 6,9 s conforme o sorteio. Um ciclo deterministico (varrer sempre
+  para o mesmo lado, meia volta a cada N s) fecharia a cauda, mas le como robo
+  de vigia de shopping. Ficou o aleatorio com vies de lado.
+- **O jogador sintetico do `pressao.mjs` nao anda nem se abriga.** Os numeros
+  dele sao regua comparativa, nao previsao do que um humano sente. Uma versao
+  com esquiva e cobertura daria um numero mais parecido com a experiencia real.

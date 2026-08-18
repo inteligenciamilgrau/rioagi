@@ -19,6 +19,22 @@
 import { Killfeed } from './Killfeed.js';
 import { DamageIndicator } from './DamageIndicator.js';
 import { Minimap } from './Minimap.js';
+import { MapaGrande } from './MapaGrande.js';
+import { CAPACIDADE as CAP_MOCHILA } from '../gameplay/Mochila.js';
+
+/**
+ * Ficha de cada tipo na tela de inventario.
+ *
+ * O texto do efeito existe porque contagem sozinha nao ensina nada: o jogador
+ * ve "KIT 2" e nao sabe quanto cura, nem por que o E as vezes recusa. Dizer
+ * o efeito e a condicao de uso resolve as duas duvidas de uma vez.
+ */
+const FICHA_ITEM = {
+  kit:        { nome: 'Kit médico',  efeito: '+45 de vida',            cond: 'só com a vida ferida' },
+  municao:    { nome: 'Munição',     efeito: '+45% da reserva',        cond: 'só com munição faltando' },
+  suprimento: { nome: 'Suprimento',  efeito: '+30 de vida e reserva cheia', cond: 'vida ou munição faltando' },
+};
+
 
 const RAD = Math.PI / 180;
 const DEG = 180 / Math.PI;
@@ -173,6 +189,11 @@ export class HUD {
     this.killfeed = new Killfeed($('.hud-feed'));
     this.dano = new DamageIndicator($('.hud-dano'), this.ctx);
     this.minimap = new Minimap($('.hud-mapa canvas'), this.ctx);
+    this.elMapao = $('.hud-mapao');
+    this.elMapaoPos = $('.hud-mapao .pos');
+    this.elMapaoHost = $('.hud-mapao .host');
+    this.mapao = new MapaGrande($('.hud-mapao canvas'), this.ctx, this.minimap);
+    this.elInvLista = $('.hud-mapao .inv-lista');
     this.minimap.construir();
 
     this._montarBussola();
@@ -261,6 +282,20 @@ export class HUD {
       `<div class="item" data-tipo="suprimento"><i></i><span class="n">0</span></div>` +
       `<div class="dica"><b>E</b><span>usar</span></div>` +
       `</div>` +
+
+      // Mapa 2D em tela cheia (TAB). Fica no fim do markup para pintar por
+      // cima do resto do HUD sem depender de z-index alto demais.
+      `<div class="hud-mapao"><canvas></canvas>` +
+      // Inventario: vive DENTRO da tela do TAB de proposito. Mapa e mochila
+      // respondem a mesma pergunta ("como estou e onde estou"), e uma tecla
+      // a menos para decorar e uma tecla a menos para esquecer.
+      `<div class="inv">` +
+      `<div class="inv-tit">Mochila</div>` +
+      `<div class="inv-lista"></div>` +
+      `<div class="inv-rodape">Use com <b>E</b></div>` +
+      `</div>` +
+      `<div class="rodape-mapao"><span class="tit">SETOR CANTAGALO</span>` +
+      `<span class="pos">—</span><span class="host">—</span></div></div>` +
 
       `<div class="hud-vida"><span class="rot">VIDA</span>` +
       `<span class="num">100</span>` +
@@ -476,6 +511,84 @@ export class HUD {
     }
   }
 
+  /**
+   * Mapa 2D em tela cheia enquanto TAB estiver SEGURADO.
+   *
+   * Segurar, e nao alternar, porque o jogo nao pausa: o mapa cobre a tela e
+   * deixar ele aberto por engano no meio de uma onda seria fatal. Segurar
+   * garante que a mao volta ao teclado sozinha.
+   *
+   * O TAB do navegador move o foco entre elementos; o Input ja chama
+   * preventDefault com o ponteiro travado, que e quando isto vale.
+   */
+  _atualizarMapao() {
+    const ctx = this.ctx;
+    const querAberto = !!ctx?.input?.isDown?.('mapa') && ctx.state === 'jogando';
+    if (!this.mapao) return;
+
+    if (querAberto !== this.mapao.aberto) {
+      this.mapao.aberto = querAberto;
+      this.elMapao?.classList.toggle('aberto', querAberto);
+    }
+    if (!querAberto) return;
+
+    // O bitmap do navGrid vem do minimapa; se ele ainda nao montou, monta.
+    if (!this.minimap?.grid && ctx?.world?.navGrid) this.minimap?.construir?.();
+    this.mapao.update();
+    this._atualizarInventario();
+
+    // Coordenada no rodape: e o mesmo dado do F3, e aqui ele responde
+    // "onde eu estou" sem precisar ligar o modo de depuracao.
+    const p = ctx?.player?.position;
+    if (p && this.elMapaoPos) {
+      this.elMapaoPos.textContent =
+        'X ' + p.x.toFixed(1) + '   Y ' + p.y.toFixed(1) + '   Z ' + p.z.toFixed(1);
+    }
+    if (this.elMapaoHost) {
+      const n = this.mapao.hostisVistos;
+      this.elMapaoHost.textContent = n === 1 ? '1 HOSTIL À VISTA' : n + ' HOSTIS À VISTA';
+    }
+  }
+  /**
+   * Preenche a tela de inventario. Chamada so com o TAB aberto e apenas
+   * quando o conteudo muda — o DOM aqui e caro e o painel fica parado.
+   */
+  _atualizarInventario() {
+    const el = this.elInvLista;
+    const mo = this.ctx?.mochila;
+    if (!el || !mo) return;
+
+    const alvo = mo.oQueUsaria?.() ?? null;
+    const chave = JSON.stringify(mo.itens) + '|' + alvo;
+    if (chave === this._chaveInv) return;
+    this._chaveInv = chave;
+
+    // Importado da Mochila: um numero so, num lugar so. Espelhar aqui seria
+    // convite para a tela dizer "2/3" enquanto a regra ja recusa no 2.
+    const cap = CAP_MOCHILA;
+    let html = '';
+    for (const tipo of ['kit', 'municao', 'suprimento']) {
+      const f = FICHA_ITEM[tipo];
+      const n = mo.itens[tipo] ?? 0;
+      const max = cap[tipo] ?? 0;
+      const classes = ['inv-item'];
+      if (n === 0) classes.push('vazio');
+      if (tipo === alvo) classes.push('alvo');
+      html += '<div class="' + classes.join(' ') + '" data-tipo="' + tipo + '">'
+        + '<i></i>'
+        + '<div class="txt"><span class="nome">' + f.nome + '</span>'
+        + '<span class="efeito">' + f.efeito + '</span></div>'
+        + '<span class="qtd">' + n + '<em>/' + max + '</em></span>'
+        + '</div>';
+    }
+    // Uma linha final que explica o estado atual do E, para a tela responder
+    // "por que nao usa" sem o jogador ter de apertar e descobrir.
+    const nota = alvo
+      ? 'E usa: ' + FICHA_ITEM[alvo].nome
+      : (mo.total() === 0 ? 'Mochila vazia' : 'Nada útil agora — ' + FICHA_ITEM.kit.cond);
+    html += '<div class="inv-nota">' + nota + '</div>';
+    el.innerHTML = html;
+  }
   _onWeaponState(p) {
     if (!p) return;
     const nome = p.name ?? this.armaNome;
@@ -769,6 +882,9 @@ export class HUD {
 
     /* ---------- bússola ---------- */
     this._atualizarBussola();
+
+    /* ---------- mapa grande (TAB) ---------- */
+    this._atualizarMapao();
 
     /* ---------- minimapa ---------- */
     const p = ctx?.player?.position;

@@ -1466,3 +1466,151 @@ input[type='range']::-moz-range-thumb {
    porquê), mas apagada, para não prometer ação que não vai acontecer. */
 .hud-mochila .dica.inativa { opacity: .4; }
 .hud-mochila .dica span { letter-spacing: .2em; }
+
+/* ==========================================================================
+   MAPA GRANDE — tela cheia enquanto TAB estiver segurado.
+   ========================================================================== */
+.hud-mapao {
+  position: absolute;
+  inset: 0;
+  display: none;
+  /* O fundo escurece a cena sem apagá-la: continua dando para perceber
+     movimento pela borda enquanto o mapa está aberto. */
+  background: rgba(6, 7, 10, .82);
+  pointer-events: none;
+  z-index: 20;
+}
+.hud-mapao.aberto { display: block; }
+.hud-mapao canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.rodape-mapao {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(14px, 3vh, 40px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: clamp(12px, 2.4vw, 34px);
+  font-family: var(--f-cond);
+  font-size: clamp(10px, 1.25vmin, 15px);
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  text-shadow: var(--sombra-txt);
+  white-space: nowrap;
+}
+.rodape-mapao .tit { color: var(--osso-3); }
+/* Coordenada em monoespaçada: número que muda de largura a cada passo faz o
+   rodapé tremer, e este texto existe justamente para ser lido e anotado. */
+.rodape-mapao .pos {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .12em;
+  color: var(--osso-1, #e9e5db);
+}
+.rodape-mapao .host { color: #e0443a; }
+
+/* ==========================================================================
+   INVENTÁRIO — painel na tela do TAB, ao lado do mapa.
+   ========================================================================== */
+.hud-mapao .inv {
+  position: absolute;
+  right: clamp(16px, 3.5vw, 64px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: clamp(210px, 22vw, 320px);
+  padding: clamp(12px, 1.6vh, 20px) clamp(12px, 1.4vw, 20px);
+  background: rgba(10, 11, 13, .74);
+  border: 1px solid rgba(233, 229, 219, .14);
+  border-radius: 4px;
+  font-family: var(--f-cond);
+  text-shadow: var(--sombra-txt);
+}
+.hud-mapao .inv-tit {
+  font-size: clamp(11px, 1.35vmin, 16px);
+  letter-spacing: .34em;
+  text-transform: uppercase;
+  color: var(--osso-3);
+  margin-bottom: clamp(8px, 1.2vh, 14px);
+}
+
+.inv-item {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, .8vw, 12px);
+  padding: clamp(5px, .8vh, 9px) 0;
+  border-top: 1px solid rgba(233, 229, 219, .08);
+}
+.inv-item.vazio { opacity: .34; }
+
+/* Marcador do tipo: mesma forma e mesma cor do canto do HUD, para o jogador
+   ligar as duas leituras sem precisar reaprender o símbolo. */
+.inv-item i {
+  width: clamp(10px, 1.3vmin, 15px);
+  height: clamp(10px, 1.3vmin, 15px);
+  border: 1.5px solid currentColor;
+  flex: none;
+}
+.inv-item[data-tipo="kit"] { color: #ff5b52; }
+.inv-item[data-tipo="kit"] i { border-radius: 2px; }
+.inv-item[data-tipo="municao"] { color: #c4d17a; }
+.inv-item[data-tipo="suprimento"] { color: var(--laranja, #e8873c); }
+.inv-item[data-tipo="suprimento"] i { transform: rotate(45deg); }
+
+/* O que o E gastaria agora. Mesma marca do HUD pequeno. */
+.inv-item.alvo i {
+  background: currentColor;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .55), 0 0 9px currentColor;
+}
+.inv-item.alvo .nome { color: var(--osso-1, #e9e5db); }
+
+.inv-item .txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.inv-item .nome {
+  font-size: clamp(11px, 1.3vmin, 15px);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--osso-2, #c9c3b7);
+}
+.inv-item .efeito {
+  font-size: clamp(9px, 1.05vmin, 12px);
+  letter-spacing: .04em;
+  color: var(--osso-3);
+}
+.inv-item .qtd {
+  margin-left: auto;
+  font-size: clamp(15px, 1.9vmin, 22px);
+  font-weight: 700;
+  color: var(--osso-1, #e9e5db);
+}
+.inv-item .qtd em {
+  font-style: normal;
+  font-size: .62em;
+  font-weight: 400;
+  color: var(--osso-3);
+}
+
+.inv-nota {
+  margin-top: clamp(8px, 1.2vh, 14px);
+  padding-top: clamp(7px, 1vh, 12px);
+  border-top: 1px solid rgba(233, 229, 219, .08);
+  font-size: clamp(9px, 1.08vmin, 12px);
+  letter-spacing: .1em;
+  color: var(--osso-3);
+}
+.hud-mapao .inv-rodape {
+  margin-top: clamp(6px, .9vh, 11px);
+  font-size: clamp(9px, 1.02vmin, 12px);
+  letter-spacing: .26em;
+  text-transform: uppercase;
+  color: var(--osso-3);
+}
+.hud-mapao .inv-rodape b {
+  color: var(--osso-1, #e9e5db);
+  border: 1px solid rgba(233, 229, 219, .34);
+  border-radius: 2px;
+  padding: 0 4px;
+  font-weight: 700;
+}

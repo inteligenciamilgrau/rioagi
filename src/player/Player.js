@@ -28,8 +28,23 @@ const _acaoDir = new THREE.Vector3();
 const _rumoAlturas = [-0.35, 0, 0.45];   // joelho, olho, telhado
 
 const HEALTH_MAX = 100;
-const REGEN_DELAY = 4.2;     // segundos sem tomar dano
-const REGEN_RATE = 32;       // hp/s
+/* Regeneracao de vida.
+ *
+ * Estes numeros foram afrouxados DEPOIS que a mochila passou a existir. Antes,
+ * 32 hp/s curava 0->100 em pouco mais de 3 s: o jogador recuava dois segundos
+ * atras de um muro e voltava inteiro, entao kit medico nao valia nada e nao
+ * havia decisao nenhuma a tomar sobre vida.
+ *
+ * Com 11 hp/s a mesma cura leva ~9 s, e a espera de 6,5 s sem tomar tiro e
+ * longa o bastante para custar posicao numa onda. Um kit (45 hp instantaneo)
+ * passa a valer ~4 s de exposicao — que e o ponto: gastar o item vira a
+ * alternativa a se esconder, e as duas saidas tem preco.
+ *
+ * Se for mexer, mexa em UM de cada vez: o atraso governa o RITMO do combate
+ * (quanto tempo o tiroteio fica pausado) e a taxa governa quanto a vida vale.
+ */
+const REGEN_DELAY = 6.5;     // segundos sem tomar dano antes de comecar
+const REGEN_RATE = 11;       // hp/s (0->100 em ~9 s)
 /** Abaixo disso o jogador saiu do mundo (o ponto mais baixo do terreno e ~-3 m). */
 const FUNDO_DO_MUNDO = -40;
 

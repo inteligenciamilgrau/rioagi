@@ -8,6 +8,8 @@
  */
 import * as THREE from 'three';
 import { Enemy, MULT_PARTE } from './Enemy.js';
+import { Drone, PARTES_DRONE } from './Drone.js';
+import { RotoresEnxame, disposeRecursosDrone } from './DroneMalha.js';
 import { NavGrid } from './NavGrid.js';
 
 const _v = new THREE.Vector3();
@@ -16,6 +18,15 @@ const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 const _pa = new THREE.Vector3();
 const _pb = new THREE.Vector3();
+/* Temporario proprio da audicao: os sons chegam por evento, de dentro do
+ * `Player.update()`, fora da pilha do `AIManager` — reaproveitar `_v` daqui
+ * seria pisar num temporario que outro metodo pode estar usando. */
+const _ouvido = new THREE.Vector3();
+/* Centro de esfera do drone. Proprio, e nao `_v2`, porque `_raioEsfera` usa
+ * `_v2` internamente — ver a nota em `_raycastDrone`. */
+const _dc = new THREE.Vector3();
+/** Centroide do enxame, para o zumbido compartilhado. */
+const _enx = new THREE.Vector3();
 
 /** Hitboxes: segmentos entre ossos + raio. Ordem importa (cabeca primeiro). */
 const HITBOXES = [
@@ -35,10 +46,45 @@ const RAIO_GROSSO = 1.15;      // esfera envolvente para rejeicao rapida
 const ALTURA_CENTRO = 1.0;
 const FICHAS_LOS = 6;          // raycasts de percepcao por frame
 const DIST_LOD = 38;           // alem disso o agente pensa a 5Hz
+
+/**
+ * Audicao — alcance nominal por fonte, em metros.
+ *
+ * O `ARCHITECTURE.md` sempre listou `weapon:fire` como PLAYER -> AI e o
+ * `Perception` sempre teve `ouvir()`, mas NINGUEM estava inscrito no barramento:
+ * o metodo era codigo morto e o hostil era literalmente surdo. Medido em
+ * `tools/reacao.mjs` antes desta mudanca: jogador andando 68 m em 25 s a 12 m
+ * de um sentinela, 41 passos audiveis, consciencia final do hostil = 0,00.
+ *
+ * O alcance do tiro e maior que o `ALCANCE_TIRO` da IA de proposito: som de
+ * fuzil em beco de morro atravessa o bairro, e ouvir de que lado veio o tiro e
+ * o que faz um esquadrao convergir em vez de esperar o jogador aparecer.
+ */
+const RAIO_SOM = { ia2: 70, smt40: 58, pt92: 44, aglc: 85 };
+const RAIO_SOM_PADRAO = 60;
+/** Passo: quanto mais discreto o jogador anda, menos longe se ouve. */
+const RAIO_PASSO = { correndo: 22, andando: 16, agachado: 5 };
+/**
+ * Forca do passo. Escala o salto INTEIRO de consciencia (ver `Perception.ouvir`).
+ * 0,38 poe um caminhante a 12 m em suspeita em ~3 passos (~1,7 s) e um corredor
+ * colado em suspeita no segundo passo — sem nunca chegar sozinho ao alerta.
+ */
+const FORCA_PASSO = 0.38;
+/** Teto de consciencia que o passo sozinho alcanca: suspeita, nunca alerta. */
+const TETO_PASSO = 0.85;
 /** Distancia minima entre dois inimigos ao nascer (evita sobreposicao). */
 const SEPARACAO_SPAWN = 7;
-/** Segundos que um corpo fica na cena antes de liberar a vaga do pool. */
-const VIDA_DO_CORPO = 26;
+/**
+ * Quantos drones o pool comporta.
+ *
+ * Fixo, e nao `maxDrones + 4` como o dos hostis de chao: a onda tematica pede
+ * enxame, e o pool tem de estar pronto ANTES dela — construir um drone no meio
+ * do combate custa a geracao da malha e engasga. O corpo em si e barato (uma
+ * `Mesh` com geometria compartilhada), entao pre-alocar com folga sai de graca.
+ */
+const POOL_DRONES = 16;
+/** Raio do enxame: alem disso o zumbido do drone nao entra na mixagem. */
+const ALCANCE_ZUMBIDO = 62;
 
 export class AIManager {
   constructor(ctx) {
@@ -46,15 +92,31 @@ export class AIManager {
     this.grupo = new THREE.Group();
     this.grupo.name = 'ia';
 
+    /* `pool` e a lista UNIFICADA (hostis de chao + drones). Quem itera por tipo
+     * usa `poolSolo`/`poolDrone`; quem trata "todo inimigo do jogo" — a
+     * `Progressao` escrevendo o perfil de dificuldade, as etiquetas de
+     * depuracao — continua iterando `pool` e nao precisa saber que ha dois
+     * tipos. Manter esse nome com o mesmo significado e o que impede a
+     * introducao do drone de virar uma mudanca de contrato. */
     this.pool = [];
+    this.poolSolo = [];
+    this.poolDrone = [];
     this.vivos = [];
+    this.rotores = null;
     this.nav = null;
 
     this._ficha = 0;
     // Nao zero: com 0 a primeira onda dispara no primeiro frame de jogo,
     // antes de o jogador sequer se mover.
     this._tOnda = 4;
+    this._tSom = 0;              // estrangulamento da audicao de tiro
     this.maxVivos = 10;
+    /** Quantos dos `maxVivos` podem ser drones. Escrito pela `Progressao`. */
+    this.maxDrones = 0;
+    /* Teto de hostis abrindo fogo ao mesmo tempo (ver Progressao.atiradoresDaOnda).
+     * Quem nao cabe manobra em vez de atirar. Vale para os DOIS tipos: o drone
+     * ocupa vaga enquanto paira e enquanto atira. */
+    this.maxAtiradores = 3;
     this.dificuldade = 'normal';
     this.spawnAutomatico = true;
   }
@@ -71,29 +133,118 @@ export class AIManager {
     const N = this.maxVivos + 4;
     for (let i = 0; i < N; i++) {
       const e = new Enemy(ctx, { dificuldade: this.dificuldade, variante: i % 3 });
-      this.grupo.add(e.soldado.grupo);
-      this.pool.push(e);
+      this.grupo.add(e.objeto3d);
+      this.poolSolo.push(e);
     }
+    for (let i = 0; i < POOL_DRONES; i++) {
+      const d = new Drone(ctx);
+      this.grupo.add(d.objeto3d);
+      this.poolDrone.push(d);
+    }
+    this.pool = [...this.poolSolo, ...this.poolDrone];
+
+    /* Todas as helices de todos os drones num unico `InstancedMesh`. Sem isto,
+     * helice que gira custaria 4 draw calls por drone — 40 numa onda de enxame,
+     * so em pas de 5 mm. Com isto, custa 1, sempre. */
+    this.rotores = new RotoresEnxame(POOL_DRONES);
+    this.grupo.add(this.rotores.malha);
 
     // O spawn e ditado pela Progressao; aqui so limpamos o campo.
     ctx.bus?.on('game:start', () => this.reset());
+
+    /* --- ouvidos --- */
+    ctx.bus?.on('weapon:fire', (p) => {
+      /* Estrangulado: a 600 rpm uma rajada dispararia 10 difusoes por segundo,
+       * cada uma com um raycast de oclusao por hostil vivo. Para a percepcao
+       * uma rajada e UM evento — o que importa e a direcao, nao a contagem. */
+      if (this._tSom > 0) return;
+      this._tSom = 0.12;
+      const raio = RAIO_SOM[p?.weapon] ?? RAIO_SOM_PADRAO;
+      this._ouviram(p?.origin ?? ctx.player?.eyePosition, raio, 1.0, 1.25);
+    });
+    ctx.bus?.on('player:footstep', (p) => {
+      const st = ctx.player?.movement?.state;
+      const raio = p?.running ? RAIO_PASSO.correndo
+        : (st === 'agachado' ? RAIO_PASSO.agachado : RAIO_PASSO.andando);
+      this._ouviram(p?.position, raio, FORCA_PASSO, TETO_PASSO);
+    });
     return this;
+  }
+
+  /**
+   * Distribui um som para quem esta dentro do alcance.
+   *
+   * O corte grosso por distancia vem ANTES de `Perception.ouvir`, que dispara um
+   * raycast de oclusao: sem ele um passo custaria um raio por hostil vivo, duas
+   * vezes por segundo, o mapa inteiro.
+   *
+   * @param {THREE.Vector3} pos onde o som nasceu
+   * @param {number} raio alcance nominal (m)
+   * @param {number} forca escala o salto de consciencia
+   * @param {number} teto ate onde este som pode levar a consciencia sozinho
+   * @returns {number} quantos ouviram
+   */
+  _ouviram(pos, raio, forca, teto) {
+    if (!pos) return 0;
+    const r2 = raio * raio;
+    let n = 0;
+    for (const e of this.vivos) {
+      if (!e.alive) continue;
+      if (e.pos.distanceToSquared(pos) > r2) continue;
+      e.posOlho(_ouvido);
+      if (e.percepcao.ouvir(pos, raio, forca, _ouvido, teto)) n++;
+    }
+    return n;
   }
 
   /* ------------------------------------------------------------------ */
   /* Spawn                                                               */
   /* ------------------------------------------------------------------ */
 
-  _livre() { return this.pool.find((e) => !e.ativo) ?? null; }
+  /**
+   * Vaga no pool. Se nao houver, RECICLA o corpo mais antigo.
+   *
+   * O pool tem `maxVivos + 4` lugares e um corpo segura o lugar dele por
+   * `e.vidaDoCorpo` (26 s no de chao, 14 s na carcaca de drone — ela e pequena
+   * e some no cenario). Com a onda pedindo 12 simultaneos, bastam tres
+   * baixas seguidas para o pool esgotar e o reforco parar de nascer bem no
+   * momento mais quente da onda — o jogador limpa a frente e o campo esvazia.
+   * Reciclar o cadaver mais velho troca "onda que mingua" por "corpo que some
+   * mais cedo quando ha gente demais em campo".
+   */
+  _livre(tipo = 'solo') {
+    const pool = tipo === 'drone' ? this.poolDrone : this.poolSolo;
+    const livre = pool.find((e) => !e.ativo);
+    if (livre) return livre;
+    let velho = null;
+    for (const e of pool) {
+      if (!e.morto) continue;
+      if (!velho || e.tEstado > velho.tEstado) velho = e;
+    }
+    if (!velho) return null;
+    const i = this.vivos.indexOf(velho);
+    if (i >= 0) this.vivos.splice(i, 1);
+    velho.despawn();
+    return velho;
+  }
 
-  /** Spawn num ponto valido do mundo, longe do jogador. */
-  spawn(pos, yaw = 0, patrulha = null) {
-    const e = this._livre();
+  /**
+   * Spawn num ponto valido do mundo, longe do jogador.
+   * @param {'solo'|'drone'} tipo qual pool serve o pedido
+   */
+  spawn(pos, yaw = 0, patrulha = null, tipo = 'solo') {
+    const e = this._livre(tipo);
     if (!e) return null;
-    e.dif = Enemy.prototype.constructor === Enemy ? e.dif : e.dif;
     e.spawn(pos, yaw, patrulha);
     this.vivos.push(e);
     return e;
+  }
+
+  /** Quantos drones vivos ha em campo agora. */
+  contarDrones() {
+    let n = 0;
+    for (const e of this.vivos) if (e.eDrone && e.alive) n++;
+    return n;
   }
 
   /**
@@ -105,29 +256,49 @@ export class AIManager {
    * ragdoll dele desaba, e o de tras continua em pe — o que se le em jogo como
    * "matei a parte de cima e sobraram as pernas", precisando matar duas vezes.
    * O segundo tambem nao atira, porque acabou de nascer com consciencia zero.
+   *
+   * `distMax` existe porque so havia PISO. Medido em `tools/pressao.mjs`: com
+   * teto infinito, um censo a cada 20 s achava reforco a 78, 134, 152 e 176 m
+   * do jogador — num mapa de 180 m, ou seja, do outro lado do morro. Eles
+   * ocupavam a vaga de vivo, a `Progressao` via o campo cheio e nao chamava
+   * mais ninguem, e o jogador ficava sozinho: 56 tiros de IA em 240 s com sete
+   * hostis em campo. Reforco tem de vir da esquina, nao do outro bairro.
    */
-  spawnOnda(quantos = 4, distMin = 22) {
+  spawnOnda(quantos = 4, distMin = 22, distMax = Infinity, tipo = 'solo') {
     const pontos = this.ctx.world?.getSpawnPoints?.() ?? [];
     if (!pontos.length) return 0;
     const jog = this.ctx.player?.position;
     let feitos = 0;
     const usados = new Set();
-    for (let tent = 0; tent < pontos.length * 2 && feitos < quantos; tent++) {
-      const i = (Math.random() * pontos.length) | 0;
-      if (usados.has(i)) continue;
-      const sp = pontos[i];
-      const p = sp.position ?? sp;
-      if (jog && p.distanceTo(jog) < distMin) continue;
-      if (this._ocupado(p)) continue;
-      usados.add(i);
-      // patrulha: alguns pontos proximos, para nao ficarem parados feito poste
-      const rota = [];
-      for (let k = 0; k < 3; k++) {
-        const q = pontos[(Math.random() * pontos.length) | 0];
-        const qp = q.position ?? q;
-        if (qp.distanceTo(p) < 34) rota.push(qp.clone());
+    /* Drone nasce mais espalhado: dois drones a 7 m um do outro convergem para
+     * a mesma faixa de parada e viram um par colado no ar, que le como um so
+     * inimigo grande. E ele voa rapido, entao nascer separado nao custa tempo
+     * de chegada como custaria a um hostil a pe. */
+    const separacao = tipo === 'drone' ? 11 : SEPARACAO_SPAWN;
+
+    /* Duas passadas: primeiro dentro da FAIXA pedida; so se ela nao render
+     * gente suficiente e que o teto e afrouxado. */
+    for (let passada = 0, teto = distMax; passada < 2 && feitos < quantos; passada++, teto *= 2.5) {
+      for (let tent = 0; tent < pontos.length * 2 && feitos < quantos; tent++) {
+        const i = (Math.random() * pontos.length) | 0;
+        if (usados.has(i)) continue;
+        const sp = pontos[i];
+        const p = sp.position ?? sp;
+        if (jog) {
+          const d = p.distanceTo(jog);
+          if (d < distMin || d > teto) continue;
+        }
+        if (this._ocupado(p, separacao)) continue;
+        usados.add(i);
+        // patrulha: alguns pontos proximos, para nao ficarem parados feito poste
+        const rota = [];
+        for (let k = 0; k < 3; k++) {
+          const q = pontos[(Math.random() * pontos.length) | 0];
+          const qp = q.position ?? q;
+          if (qp.distanceTo(p) < 34) rota.push(qp.clone());
+        }
+        if (this.spawn(p, sp.yaw ?? 0, rota, tipo)) feitos++;
       }
-      if (this.spawn(p, sp.yaw ?? 0, rota)) feitos++;
     }
     return feitos;
   }
@@ -270,6 +441,34 @@ export class AIManager {
   getEnemies() { return this.vivos.filter((e) => e.alive); }
 
   /**
+   * Ha vaga para mais um fuzil apontado para o jogador agora?
+   *
+   * Nao e economia de CPU, e de JUSTICA. Sem teto, todo hostil que chega entra
+   * em ATIRAR e o dano recebido cresce linearmente com a densidade — medido em
+   * tools/pressao.mjs, subir de 7 para 9 hostis simultaneos dobrou o dano por
+   * minuto e o boneco caiu 33 vezes numa onda so. O jogo nao ficou mais dificil
+   * nesse ponto, ficou aritmetico.
+   *
+   * @param {Enemy} quem candidato
+   */
+  vagaDeFogo(quem) {
+    let n = 0;
+    for (const o of this.vivos) {
+      if (o === quem || !o.alive) continue;
+      /* `ocupaVagaDeFogo` e do CONTRATO, nao `estado === 'atirar'`.
+       *
+       * O drone gasta ~1 s travado em `PAIRAR` mirando antes de disparar, e
+       * nesse segundo ele ja escolheu o alvo e ja esta comprometido. Se so
+       * `ATIRAR` contasse, dez drones poderiam pairar juntos e a rajada de
+       * todos cairia na mesma janela — exatamente a parede de dano que este
+       * teto existe para impedir, so que atrasada em um segundo. */
+      if (o.ocupaVagaDeFogo) n++;
+      if (n >= this.maxAtiradores) return false;
+    }
+    return true;
+  }
+
+  /**
    * Um hostil avistou o jogador e grita: quem estiver perto passa a suspeitar.
    *
    * É o comportamento que mais muda a percepção de inteligência. Sem isso o
@@ -320,6 +519,25 @@ export class AIManager {
     for (const e of this.vivos) {
       if (!e.alive) continue;
 
+      if (e.eDrone) {
+        const d = this._raycastDrone(e, origin, dir, melhorD);
+        if (d) {
+          melhorD = d.distance;
+          melhor = melhor ?? {
+            enemyId: 0, point: new THREE.Vector3(), normal: new THREE.Vector3(),
+            part: 'torso', distance: 0,
+          };
+          melhor.enemyId = e.id;
+          melhor.part = d.parte;
+          melhor.distance = d.distance;
+          melhor.point.copy(origin).addScaledVector(dir, d.distance);
+          melhor.normal.copy(melhor.point).sub(d.centro);
+          if (melhor.normal.lengthSq() < 1e-8) melhor.normal.copy(dir).negate();
+          else melhor.normal.normalize();
+        }
+        continue;
+      }
+
       // Rejeicao grossa por esfera envolvente antes de testar 10 capsulas.
       _v.copy(e.pos); _v.y += ALTURA_CENTRO;
       const t = this._raioEsfera(origin, dir, _v, RAIO_GROSSO);
@@ -360,12 +578,90 @@ export class AIManager {
     return melhor;
   }
 
+  /**
+   * Raio contra as esferas de um drone.
+   *
+   * Escolhe por MULTIPLICADOR, nao por proximidade — e essa a unica diferenca
+   * conceitual em relacao as capsulas do hostil de chao, e ela e obrigatoria.
+   * As tres esferas do drone se CONTEM (nucleo dentro do casco, casco dentro do
+   * envelope), entao "a que o raio encontra primeiro" e sempre o envelope: com
+   * ordenacao por distancia, o nucleo nunca seria acertado e a mira precisa nao
+   * valeria nada. As capsulas do soldado sao disjuntas e nao tem esse problema.
+   *
+   * A distancia reportada e a da esfera ESCOLHIDA, para o desempate contra
+   * outros inimigos continuar coerente.
+   *
+   * @returns {{parte:string, distance:number, centro:THREE.Vector3}|null}
+   */
+  _raycastDrone(e, origin, dir, maxDist) {
+    /* ATENCAO ao temporario: `_raioEsfera` usa `_v2` por dentro. Montar o
+     * centro da esfera em `_v2` e passa-lo adiante faz o proprio teste destruir
+     * o centro antes de ele ser guardado — a normal do impacto sairia calculada
+     * a partir de lixo. Por isso o centro mora em `_dc`, que ninguem mais toca. */
+    const env = PARTES_DRONE[PARTES_DRONE.length - 1];
+    _dc.set(env.x, env.y, env.z).applyQuaternion(e.corpo.quaternion).add(e.pos);
+    if (this._raioEsfera(origin, dir, _dc, env.raio) < 0) return null;
+
+    let escolhida = null;
+    for (const p of PARTES_DRONE) {
+      _dc.set(p.x, p.y, p.z).applyQuaternion(e.corpo.quaternion).add(e.pos);
+      const t = this._raioEsfera(origin, dir, _dc, p.raio);
+      if (t < 0 || t > maxDist) continue;
+      if (!escolhida || p.mult > escolhida.mult) {
+        escolhida = { parte: p.parte, distance: t, mult: p.mult, centro: _pa.copy(_dc) };
+      }
+    }
+    return escolhida;
+  }
+
+  /**
+   * Aplica dano a um inimigo.
+   *
+   * ACEITA DUAS FORMAS DE CHAMADA, e isso nao e capricho — era um defeito:
+   *
+   *   damageEnemy(id, dano, ponto, parte, arma)          <- forma posicional
+   *   damageEnemy(id, dano, { point, part, headshot, ... }) <- forma de payload
+   *
+   * `WeaponSystem._damageEnemy` sempre chamou a SEGUNDA (`ai.damageEnemy(id,
+   * dmg, payload)`) e este metodo so entendia a PRIMEIRA. Duas consequencias,
+   * ambas silenciosas:
+   *
+   *  1. `parte` chegava `undefined`, entao `MULT_PARTE[undefined] ?? 1` valia
+   *     1 SEMPRE. A hitbox de cabeca de 2,5x que o ARCHITECTURE.md especifica
+   *     nunca foi aplicada por este caminho — e o `headMult` da arma tambem
+   *     nao, porque do lado do PLAYER `headshot` e `part === 'head'` e a IA
+   *     devolve `'cabeca'`. Ou seja: tiro na cabeca valia exatamente o mesmo
+   *     que tiro na barriga.
+   *  2. `ponto` chegava o OBJETO de payload, e `subVectors(payload, camera)`
+   *     produz NaN (payload.x nao existe). Esse NaN ia para `soldado.flinch` e
+   *     para `Ragdoll.impulso` como direcao do tiro.
+   *
+   * Achado ao ligar o drone: o `nucleo` dele (2,0x, a recompensa por mira
+   * precisa contra um alvo pequeno) simplesmente nao existiria, porque depende
+   * de `parte` chegar inteira. Nao da para entregar a hitbox de precisao e
+   * deixar o cano dela entupido.
+   *
+   * A multiplicacao por parte fica de UM lado so — este. Do lado do PLAYER,
+   * `PART_MULT` nao tem chave para os nomes que a IA usa (`cabeca`, `torso`,
+   * `bracos`, `pernas`, `nucleo`, `casco`, `rotores`) e cai em `default: 1.0`,
+   * entao nao ha dupla contagem.
+   */
   damageEnemy(enemyId, damage, point, part, weapon) {
     const e = this.vivos.find((x) => x.id === enemyId);
     if (!e || !e.alive) return false;
+
+    // Forma de payload: `point` e um objeto de dados, nao um Vector3.
+    if (point && typeof point === 'object' && typeof point.x !== 'number') {
+      const p = point;
+      part = p.part ?? part;
+      weapon = p.weapon ?? weapon;
+      point = p.point ?? null;
+    }
+
     _v.set(0, 0, 0);
-    if (this.ctx.camera && point) {
-      _v.subVectors(point, this.ctx.camera.position).normalize();
+    if (this.ctx.camera && point && typeof point.x === 'number') {
+      _v.subVectors(point, this.ctx.camera.position);
+      if (_v.lengthSq() > 1e-12) _v.normalize(); else _v.set(0, 0, 1);
     }
     const matou = e.levarDano(damage, point, part, _v);
     void weapon;
@@ -447,29 +743,47 @@ export class AIManager {
 
   update(dt, elapsed) {
     this.nav?.update(dt);
+    if (this._tSom > 0) this._tSom -= dt;
 
     const jog = this.ctx.player?.position;
     this._ficha = FICHAS_LOS;
+    this.rotores?.comecar();
+    let nDrones = 0, tensao = 0, maisPerto = Infinity;
+    _enx.set(0, 0, 0);
 
     for (let i = this.vivos.length - 1; i >= 0; i--) {
       const e = this.vivos[i];
 
       // Corpo velho: some e devolve a vaga do pool. Sem isto o pool esgota
       // (`ativo` continuava true para sempre) e `_ocupado` bloquearia o mapa.
-      if (e.morto && e.tEstado > VIDA_DO_CORPO) {
+      if (e.morto && e.tEstado > e.vidaDoCorpo) {
         e.despawn();
         this.vivos.splice(i, 1);
         continue;
       }
 
-      if (e.morto) { e.update(dt); continue; }
+      if (e.morto) {
+        e.update(dt);
+        // carcaca caindo ainda tem helice girando por inercia
+        if (e.eDrone && e.corpo.visible) this.rotores?.adicionar(e.corpo, e.giroHelice);
+        continue;
+      }
 
       // LOD: longe pensa a 5Hz. O ragdoll e a animacao seguem cheios.
       const dist = jog ? e.pos.distanceTo(jog) : 0;
       let passo = dt;
       if (dist > DIST_LOD) {
         e._lento += dt;
-        if (e._lento < 0.2) { e.soldado.update(dt); continue; }
+        if (e._lento < 0.2) {
+          /* O hostil de chao ainda anima o esqueleto no quadro "pulado" (a
+           * animacao e barata e sem ela ele patina). O drone nao tem animacao
+           * de esqueleto: ele so precisa nao sumir do lugar, e a pose e escrita
+           * dentro do `update` cheio. Entao aqui ele so mantem a helice. */
+          if (e.eDrone) this.rotores?.adicionar(e.corpo, e.giroHelice);
+          else e.soldado.update(dt);
+          if (e.eDrone) { nDrones++; _enx.add(e.pos); if (dist < maisPerto) maisPerto = dist; }
+          continue;
+        }
         passo = e._lento;
         e._lento = 0;
       }
@@ -477,7 +791,19 @@ export class AIManager {
       const temFicha = this._ficha > 0;
       if (temFicha) this._ficha--;
       e.update(passo, temFicha);
+
+      if (e.eDrone) {
+        this.rotores?.adicionar(e.corpo, e.giroHelice);
+        nDrones++;
+        _enx.add(e.pos);
+        if (dist < maisPerto) maisPerto = dist;
+        // tensao do enxame = quantos ja estao comprometidos com o tiro
+        if (e.ocupaVagaDeFogo) tensao += 1;
+      }
     }
+
+    this.rotores?.terminar();
+    this._zumbir(nDrones, _enx, maisPerto, tensao);
 
     // Ondas: repoe inimigos conforme o jogador limpa.
     if (this.spawnAutomatico && this.ctx.state === 'jogando') {
@@ -492,23 +818,65 @@ export class AIManager {
     void elapsed;
   }
 
+  /**
+   * Zumbido do enxame — UMA voz para N drones.
+   *
+   * Este e o ponto em que um enxame estoura o orcamento de audio se for feito
+   * do jeito obvio. O `AudioEngine` tem teto de 48 vozes posicionadas e ja
+   * descarta ~44% dos pedidos com 12 hostis a 600 rpm (medido, ver o cabecalho
+   * dele). Dar a cada drone um zumbido proprio, em loop, seriam 10 vozes
+   * PERMANENTEMENTE ocupadas — vozes que nunca terminam e portanto nunca
+   * liberam a cadeia, comendo um quinto do pool o tempo todo, contra sons que
+   * duram 200 ms. O descarte de tiro e impacto iria as alturas e o jogador
+   * perderia justamente a informacao de combate para ouvir um zunido.
+   *
+   * A saida e admitir que um enxame nao SOA como dez drones: soa como uma massa
+   * unica que muda de tom e de lugar. Entao e uma voz so, permanente, fora do
+   * pool (como o vento do ambiente), posicionada no CENTROIDE do enxame e
+   * modulada por quantos sao, quao perto esta o mais proximo e quantos ja estao
+   * comprometidos com o tiro. Custo: fixo, independente do tamanho do enxame.
+   *
+   * O que se perde: nao da para localizar UM drone especifico pelo zumbido. O
+   * que se ganha: da para localizar o enxame, e o telegrafo de investida
+   * (`droneInvestida`) continua sendo som posicionado de verdade, um por drone
+   * que ataca — e sao no maximo `maxAtiradores`, ou seja 3 ou 4.
+   */
+  _zumbir(n, soma, maisPerto, tensao) {
+    const audio = this.ctx.audio;
+    if (!audio?.zumbidoEnxame) return;
+    if (n <= 0 || maisPerto > ALCANCE_ZUMBIDO) { audio.zumbidoEnxame(null, 0, 0, 0); return; }
+    _enx.multiplyScalar(1 / n);
+    void soma;
+    audio.zumbidoEnxame(_enx, n, maisPerto, tensao);
+  }
+
   setQuality(preset) {
     // Menos inimigos simultaneos em preset baixo.
     this.maxVivos = preset.particleScale <= 0.25 ? 6 : (preset.particleScale <= 0.5 ? 8 : 10);
   }
 
   estatisticas() {
+    const vivos = this.vivos.filter((e) => e.alive);
     return {
-      vivos: this.vivos.filter((e) => e.alive).length,
+      vivos: vivos.length,
+      drones: vivos.filter((e) => e.eDrone).length,
       corpos: this.vivos.filter((e) => e.morto).length,
       pool: this.pool.length,
+      poolSolo: this.poolSolo.length,
+      poolDrone: this.poolDrone.length,
     };
   }
 
   dispose() {
+    this.ctx.audio?.zumbidoEnxame?.(null, 0, 0, 0);
     for (const e of this.pool) e.dispose();
     this.pool.length = 0;
+    this.poolSolo.length = 0;
+    this.poolDrone.length = 0;
     this.vivos.length = 0;
+    this.rotores?.dispose();
+    this.rotores = null;
+    disposeRecursosDrone();
     this.nav?.dispose();
     this.ctx.scene?.remove(this.grupo);
   }

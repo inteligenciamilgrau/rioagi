@@ -172,7 +172,7 @@ export class Etiquetas {
       let dono = 'NENHUM inimigo do pool';
       for (const e of ctx.ai?.pool ?? []) {
         let o = h.object;
-        while (o) { if (o === e.soldado.grupo) { dono = `#${e.id} ativo=${e.ativo} morto=${e.morto}`; break; } o = o.parent; }
+        while (o) { if (o === e.objeto3d) { dono = `#${e.id} ativo=${e.ativo} morto=${e.morto}`; break; } o = o.parent; }
         if (dono !== 'NENHUM inimigo do pool') break;
       }
       console.log(
@@ -214,20 +214,20 @@ export class Etiquetas {
   _dump() {
     const pool = this.ctx.ai?.pool ?? [];
     const ativos = pool.filter((e) => e.ativo);
-    const visiveis = pool.filter((e) => e.soldado.grupo.visible);
+    const visiveis = pool.filter((e) => e.objeto3d?.visible);
     console.group('%c[ESTADO DA IA] ' + ativos.length + ' ativo(s), '
       + visiveis.length + ' visivel(is), de ' + pool.length,
       'color:#5fd08a;font-weight:bold');
 
     // Inativos que continuam sendo desenhados: malha orfa.
     for (const e of pool) {
-      if (!e.ativo && e.soldado.grupo.visible) {
+      if (!e.ativo && e.objeto3d?.visible) {
         console.warn(`#${e.id} INATIVO MAS VISIVEL — malha orfa em `
           + `(${e.pos.x.toFixed(1)},${e.pos.y.toFixed(1)},${e.pos.z.toFixed(1)})`);
       }
     }
     // Soldados na cena que nao sao do pool.
-    const doPool = new Set(pool.map((e) => e.soldado.grupo));
+    const doPool = new Set(pool.map((e) => e.objeto3d));
     this.ctx.scene?.traverse((o) => {
       if (o.name === 'soldado' && !doPool.has(o)) {
         console.warn('SOLDADO FORA DO POOL na cena, visivel =', o.visible, o);
@@ -235,6 +235,16 @@ export class Etiquetas {
     });
 
     for (const e of ativos) {
+      if (e.eDrone) {
+        const alt = e.pos.y - (e._chaoY ?? 0);
+        console.log(
+          `#${e.id} DRONE ${e.morto ? 'MORTO' : e.estado.padEnd(13)} vida=${Math.round(e.vida)}`
+          + ` pos=(${e.pos.x.toFixed(1)},${e.pos.y.toFixed(1)},${e.pos.z.toFixed(1)})`
+          + ` alt=${alt.toFixed(2)}m vel=${e.vel.length().toFixed(1)}m/s`
+          + ` vis=${e.corpo.visible}`,
+        );
+        continue;
+      }
       const s = e.soldado;
       s.grupo.updateMatrixWorld(true);
       const q = s.porNome?.quadril, c = s.porNome?.cabeca;
@@ -350,16 +360,22 @@ export class Etiquetas {
      *    na tela, e uma malha que ficou orfa (despawn nao escondeu). */
     const vistos = new Set();
     for (const inim of ai?.pool ?? []) {
-      const sold = inim.soldado;
-      vistos.add(sold.grupo);
+      /* `ai.pool` traz hostis de chao E drones. O drone nao tem `soldado` nem
+       * osso de cabeca: o que os dois compartilham e `objeto3d`, o no de cena
+       * que o manager pendura no grupo da IA. Ler por ai e o que faz a etiqueta
+       * funcionar nos dois sem um `if` por tipo em cada linha. */
+      const obj = inim.objeto3d;
+      if (!obj) continue;
+      const sold = inim.soldado ?? null;
+      vistos.add(obj);
       // so etiqueta o que esta de fato visivel na cena
-      if (!sold.grupo.visible) continue;
+      if (!obj.visible) continue;
       const et = this._pegar(n++);
-      sold.grupo.updateMatrixWorld(true);
+      obj.updateMatrixWorld(true);
 
-      const osso = sold.porNome?.cabeca;
+      const osso = sold?.porNome?.cabeca;
       if (osso) osso.getWorldPosition(this._v);
-      else this._v.copy(inim.pos).setY(inim.pos.y + 1.7);
+      else this._v.copy(inim.pos).setY(inim.pos.y + (inim.eDrone ? 0.34 : 1.7));
       this._v.y += 0.34;
       et.sprite.position.copy(this._v);
 

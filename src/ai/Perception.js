@@ -155,7 +155,12 @@ export class Perception {
       this.consciencia = Math.min(1.6, this.consciencia + TAXA_BASE * fd * fc * fm * this.ganho * dt);
     } else {
       this.tempoVendo = 0;
-      if (this.tempoSemVer > ATRASO_DECAIR) {
+      /* So comeca a esquecer depois de parar de VER e de OUVIR. Sem a segunda
+       * metade da condicao a audicao nao acumula: um jogador andando a 12 m
+       * entrega um passo a cada ~0,55 s, o que rende ~0,17 de consciencia por
+       * segundo contra 0,26 de decaimento — o hostil ouvia os 40 passos e
+       * terminava com a barra zerada. Medido em tools/reacao.mjs, tabela C. */
+      if (this.tempoSemVer > ATRASO_DECAIR && this.tempoDesdeSom > ATRASO_DECAIR) {
         const taxa = DECAIMENTO * (this.consciencia > LIMIAR_ALERTA ? 0.55 : 1.0);
         this.consciencia = Math.max(0, this.consciencia - taxa * dt);
       }
@@ -173,11 +178,22 @@ export class Perception {
   }
 
   /**
-   * Som ouvido. `raio` ja e o raio nominal da arma; a atenuacao por parede e
+   * Som ouvido. `raio` ja e o raio nominal da fonte; a atenuacao por parede e
    * calculada aqui (uma unica sondagem).
+   *
+   * `forca` escala o SALTO INTEIRO de consciencia, nao so a parcela que depende
+   * da distancia. Antes escalava so a parcela, entao o piso de 0,30 valia tanto
+   * para um fuzil quanto para um passo de bota — com passo ligado, dois passos
+   * levavam qualquer sentinela a suspeitar de qualquer coisa.
+   *
+   * `teto` limita ate onde o som sozinho pode levar a consciencia. Tiro pode
+   * chegar ao alerta (voce se denunciou); passo NAO — ele para em suspeita, e
+   * o hostil tem de virar e ENXERGAR para atirar. Som que dispara tiro sozinho
+   * e onisciencia com outro nome.
+   *
    * @returns {boolean} se o som foi de fato percebido
    */
-  ouvir(posicao, raio, forca = 1.0, olho = null) {
+  ouvir(posicao, raio, forca = 1.0, olho = null, teto = 1.25) {
     const p = olho || this.ultimaPos;
     const dx = posicao.x - p.x, dy = posicao.y - p.y, dz = posicao.z - p.z;
     let dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -194,8 +210,11 @@ export class Perception {
     const alcanceEfetivo = raio * atenuacao;
     if (dist > alcanceEfetivo) return false;
 
-    const intensidade = (1 - dist / alcanceEfetivo) * forca * atenuacao;
-    this.consciencia = Math.min(1.25, this.consciencia + 0.30 + intensidade * 0.55);
+    const intensidade = (1 - dist / alcanceEfetivo) * atenuacao;
+    const salto = (0.30 + intensidade * 0.55) * forca;
+    // Nunca DERRUBA a consciencia: quem ja esta alerta por ter visto nao pode
+    // ser rebaixado por ouvir um passo (o teto e limite de subida, nao de nivel).
+    if (this.consciencia < teto) this.consciencia = Math.min(teto, this.consciencia + salto);
     this.origemSom.copy(posicao);
     this.temSom = true;
     this.tempoDesdeSom = 0;

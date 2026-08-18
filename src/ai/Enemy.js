@@ -28,18 +28,43 @@ export const ESTADO = {
 /** Multiplicadores de hitbox por parte do corpo. */
 export const MULT_PARTE = { cabeca: 2.5, torso: 1.0, bracos: 0.75, pernas: 0.75 };
 
-/** Perfis de dificuldade. */
+/**
+ * Perfis de dificuldade.
+ *
+ * Os eixos que sobem sao TEMPO DE REACAO e PRECISAO, mais o quanto o hostil
+ * sustenta fogo (rajada/pausa). `dano` esta congelado de proposito em todos os
+ * tres — subir dano por bala e o atalho que faz o jogador morrer sem entender
+ * o que aconteceu, e o contrato do ARCHITECTURE.md proibe.
+ *
+ * `erroMin` em radianos, comparado com a tolerancia de acerto: o tiro so pega
+ * se passar a menos de 0,45 m do alvo, ou seja 0,45/dist rad. A 14 m isso da
+ * 0,032 — e por isso que `facil` com 0,032 erra bastante a media distancia e
+ * `dificil` com 0,009 quase nao erra quem esta parado. Contra alvo em
+ * movimento vale a lideranca de tiro, que tambem escala com o perfil.
+ */
 export const DIFICULDADE = {
-  facil:   { reacao: [0.55, 0.95], erro0: 0.13, erroMin: 0.035, converge: 1.6, rajada: [2, 4], pausa: [0.7, 1.4], dano: 7 },
-  normal:  { reacao: [0.32, 0.62], erro0: 0.10, erroMin: 0.020, converge: 2.4, rajada: [3, 6], pausa: [0.5, 1.1], dano: 10 },
-  dificil: { reacao: [0.22, 0.42], erro0: 0.075, erroMin: 0.011, converge: 3.4, rajada: [4, 8], pausa: [0.35, 0.8], dano: 13 },
+  facil:   { reacao: [0.48, 0.86], erro0: 0.13, erroMin: 0.032, converge: 1.8, rajada: [3, 5], pausa: [0.62, 1.25], dano: 7 },
+  normal:  { reacao: [0.27, 0.52], erro0: 0.10, erroMin: 0.017, converge: 2.8, rajada: [4, 7], pausa: [0.44, 0.95], dano: 10 },
+  dificil: { reacao: [0.18, 0.34], erro0: 0.07, erroMin: 0.009, converge: 3.9, rajada: [5, 9], pausa: [0.30, 0.68], dano: 13 },
 };
 
 const VEL_ANDAR = 2.1;
+const VEL_TROTE = 3.3;      // quem foi avisado e vai investigar nao passeia
 const VEL_CORRER = 4.6;
+/* Vigia: quanto o hostil parado gira a cada olhada, e quanto espera entre elas.
+ * Com giro medio de ~1,65 rad a cada ~1,65 s o azimute fecha uma volta em ~7 s
+ * no pior caso e em ~3 s no tipico — e com o meio-cone de 55 graus qualquer
+ * rumo entra no campo de visao dentro dessa janela. */
+const VIGIA_GIRO = [1.0, 2.3];      // rad
+const VIGIA_ESPERA = [0.45, 1.0];   // s parado entre uma olhada e outra
+const VIGIA_VEL = 3.0;              // ganho do giro do corpo enquanto varre
+/** Teto de tempo investigando um mesmo aviso, em segundos.
+ * 22 s a 3,3 m/s cobre os 46 m da faixa de reforco com folga para desvio. */
+const SUSPEITA_MAX = 22;
 const ALCANCE_TIRO = 42;
 const DIST_IDEAL = 14;      // distancia que tenta manter do alvo
 const MUNICAO_PENTE = 30;
+
 
 let proximoId = 1;
 
@@ -93,6 +118,11 @@ export class Enemy {
     this.patrulha = [];
     this.iPatrulha = 0;
     this._lento = 0;   // contador de LOD
+
+    // vigia (varredura de olhar quando parado)
+    this._tVigia = 0;
+    this._ladoVigia = Math.random() < 0.5 ? 1 : -1;
+    this._varrendo = false;
   }
 
   /* ------------------------------------------------------------------ */
@@ -112,6 +142,13 @@ export class Enemy {
     this._reagindo = false;
     this._naRajada = 0;
     this._alertouEsquadrao = false;
+    /* O vigia SEGURA o rumo de nascimento por um instante antes da primeira
+     * olhada. Com `_tVigia = 0` ele virava as costas no primeiro quadro, e um
+     * hostil posto de frente para o jogador perdia o contato antes de a
+     * consciencia subir: medido, notar a 30 m de frente foi de 0,3 s para 5,4 s
+     * so por causa disso. O posto e para ser olhado primeiro. */
+    this._tVigia = 0.5 + Math.random() * 1.5;
+    this._varrendo = false;
     this.percepcao.reset();
     this.soldado.reviver();
     this.soldado.grupo.visible = true;
@@ -137,6 +174,8 @@ export class Enemy {
     this.estado = novo;
     this.tEstado = 0;
   }
+
+
 
   /* ------------------------------------------------------------------ */
   /* Dano                                                                */
@@ -216,6 +255,7 @@ export class Enemy {
     this.percepcao.update(dt, _olho, _frente, alvo, temOrcamento);
 
     this._pensar(dt, alvo);
+    this._vigiar(dt);
     this._mover(dt);
     this._apontar(dt, alvo);
 
@@ -241,15 +281,28 @@ export class Enemy {
         if (!this.temDestino || this._chegou(1.2)) this._proximoPontoPatrulha();
         break;
 
-      case ESTADO.SUSPEITO:
-        // Vai investigar a ultima posicao conhecida / origem do som.
+      case ESTADO.SUSPEITO: {
+        /* Vai investigar a ultima posicao conhecida / origem do som.
+         *
+         * A desistencia NAO e mais "a barra de consciencia secou". Era: um
+         * reforco avisado nascia com 0,55, e 0,55 vira 0,05 em 3,3 s de
+         * decaimento — ou seja, ele andava tres segundos na direcao do jogador,
+         * dava meia-volta e voltava a patrulhar, a 20 m do alvo. O jogo ficava
+         * vazio com sete hostis em campo. Agora ele desiste quando CHEGOU e
+         * olhou em volta, ou quando o tempo total estoura. Isso e paciencia de
+         * sentinela, nao onisciencia: ele continua sem saber onde o alvo esta. */
         if (P.alerta) { this._trocar(ESTADO.ALERTA); break; }
-        if (P.consciencia <= 0.05) { this._trocar(this.patrulha.length ? ESTADO.PATRULHA : ESTADO.OCIOSO); break; }
-        if (!this.temDestino || this._chegou(1.5)) {
+        const chegou = this.temDestino && this._chegou(1.8);
+        if ((chegou && this.tEstado > 3.0) || this.tEstado > SUSPEITA_MAX) {
+          this._trocar(this.patrulha.length ? ESTADO.PATRULHA : ESTADO.OCIOSO);
+          break;
+        }
+        if (!this.temDestino || chegou) {
           const p = P.temSom ? P.origemSom : (P.temUltima ? P.ultimaPos : null);
           if (p) this._irPara(p);
         }
         break;
+      }
 
       case ESTADO.ALERTA:
         if (!temAlvo) { this._trocar(ESTADO.PATRULHA); break; }
@@ -268,13 +321,16 @@ export class Enemy {
         }
         this._tReacao -= dt;
         if (this._tReacao <= 0) {
-          this._trocar(P.visivel ? ESTADO.ATIRAR : ESTADO.PERSEGUIR);
+          if (!P.visivel) { this._trocar(ESTADO.PERSEGUIR); break; }
+          /* Se a frente ja esta cheia de fuzil, este contorna em vez de somar
+           * mais um cano na mesma linha (ver AIManager.vagaDeFogo). */
+          this._abrirFogo();
         }
         break;
 
       case ESTADO.PERSEGUIR: {
         if (!temAlvo) { this._trocar(ESTADO.PATRULHA); break; }
-        if (P.visivel && P.distAlvo < ALCANCE_TIRO) { this._trocar(ESTADO.ATIRAR); break; }
+        if (P.visivel && P.distAlvo < ALCANCE_TIRO) { this._abrirFogo(); break; }
         this._tRepath -= dt;
         const destino = P.temUltima ? P.ultimaPos : alvo.position;
         if (this._tRepath <= 0 || !this.temDestino) {
@@ -313,8 +369,18 @@ export class Enemy {
             this.temDestino = false;
           }
         }
-        // Sob fogo prolongado, procura cobertura.
-        if (this.tEstado > 3.5 + Math.random() * 2.5) this._trocar(ESTADO.COBERTURA);
+        /* Sob fogo prolongado sai da linha. PARA ONDE depende de ter companhia:
+         * se ha outro hostil engajado, este contorna (FLANQUEAR) em vez de se
+         * enfiar atras de um muro, e o par vira "um segura, o outro aparece do
+         * lado". Sozinho, cobertura — nao ha quem segure a frente.
+         *
+         * E o unico jeito de subir a tensao sem subir dano nem precisao: o que
+         * aperta o jogador nao e a bala do sujeito a sua frente, e o segundo
+         * sujeito chegando pela lateral enquanto ele olha para o primeiro. */
+        if (this.tEstado > 3.2 + Math.random() * 2.4) {
+          this._trocar(this._temCompanhiaEngajada() && Math.random() < 0.55
+            ? ESTADO.FLANQUEAR : ESTADO.COBERTURA);
+        }
         this._atirar(dt, alvo);
         break;
       }
@@ -323,8 +389,8 @@ export class Enemy {
         if (this.municao <= 0) { this._trocar(ESTADO.RECARREGAR); break; }
         if (!this.cobertura || this._tCobertura <= 0) {
           const c = this._acharCobertura(alvo);
-          if (c) { this.cobertura = c; this._irPara(c); this._tCobertura = 6 + Math.random() * 4; }
-          else { this._trocar(ESTADO.ATIRAR); break; }
+          if (c) { this.cobertura = c; this._irPara(c); this._tCobertura = 3.5 + Math.random() * 3; }
+          else { this._abrirFogo(); break; }
         }
         this._tCobertura -= dt;
         if (this._chegou(1.0)) {
@@ -348,7 +414,8 @@ export class Enemy {
           this._irPara(_v);
         }
         if (this.tEstado > 4 || (this.percepcao.visivel && this.percepcao.distAlvo < DIST_IDEAL)) {
-          this._trocar(ESTADO.ATIRAR);
+          // so volta a atirar se houver vaga; senao segue contornando
+          if (!this._abrirFogo(ESTADO.FLANQUEAR)) this.tEstado = 0;
         }
         break;
       }
@@ -364,10 +431,82 @@ export class Enemy {
         }
         if (this.tEstado > 2.3) {
           this.municao = MUNICAO_PENTE;
-          this._trocar(this.percepcao.visivel ? ESTADO.ATIRAR : ESTADO.PERSEGUIR);
+          if (this.percepcao.visivel) this._abrirFogo(ESTADO.COBERTURA);
+          else this._trocar(ESTADO.PERSEGUIR);
         }
         break;
     }
+  }
+
+  /**
+   * Entra em ATIRAR se houver vaga de fogo; senao vai manobrar.
+   *
+   * Tem de passar por AQUI em TODOS os caminhos que levam a ATIRAR. Na primeira
+   * versao o teto so era checado em dois dos cinco (ALERTA e FLANQUEAR) e o
+   * censo continuou mostrando cinco fuzis simultaneos com teto de quatro: a
+   * maioria entra em ATIRAR vinda de PERSEGUIR.
+   */
+  _abrirFogo(alternativa = ESTADO.FLANQUEAR) {
+    if (this.ctx.ai?.vagaDeFogo?.(this) === false) { this._trocar(alternativa); return false; }
+    this._trocar(ESTADO.ATIRAR);
+    return true;
+  }
+
+  /** Ha outro hostil vivo empenhado no alvo agora? (decide flanquear x cobrir) */
+  _temCompanhiaEngajada() {
+    const vivos = this.ctx.ai?.vivos;
+    if (!vivos) return false;
+    for (const o of vivos) {
+      if (o === this || !o.alive) continue;
+      if (o.estado === ESTADO.ATIRAR || o.estado === ESTADO.ALERTA) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Vigia: hostil PARADO e sem nenhuma consciencia gira o corpo para varrer o
+   * entorno, como qualquer sentinela faz.
+   *
+   * PORQUE isto existe (medido, `tools/reacao.mjs`): o cone de visao tem 110
+   * graus e o `yaw` de um hostil parado nao era escrito por ninguem. Resultado:
+   * 250 graus de arco cego PERMANENTE. Um jogador em pe, a vista, com linha de
+   * visada livre, a 6/12/20/30 m e 90 ou 180 graus do rumo do sentinela nunca
+   * era notado — 25 s de medicao, consciencia final 0,00 nas oito celulas.
+   * De frente (0 grau) o mesmo hostil notava em 0,2 s: a percepcao nunca foi o
+   * problema, a imobilidade do olhar era.
+   *
+   * COMO nao brigar com quem mais escreve `yawAlvo`: `_mover` so escreve quando
+   * ha ponto de caminho, e `_apontar` so quando o hostil ja esta mirando (logo,
+   * ja consciente). A varredura roda exatamente no complemento disso — parado e
+   * inconsciente — entao nenhum dos dois e sobrescrito.
+   *
+   * O giro guarda um LADO (`_ladoVigia`) e so o troca de vez em quando. Uma
+   * varredura de lado sorteado a cada olhada e um passeio aleatorio: ela demora
+   * a fechar a volta e pode ficar bailando no mesmo setor, que foi o que
+   * derrubou a tentativa anterior de varredura.
+   */
+  _vigiar(dt) {
+    const parado = !this.caminho.length && this.vel.lengthSq() < 0.05;
+    const inconsciente = this.percepcao.consciencia < 0.35;
+    const podeVarrer = this.estado === ESTADO.OCIOSO || this.estado === ESTADO.PATRULHA;
+    if (!parado || !inconsciente || !podeVarrer) {
+      this._varrendo = false;
+      return;
+    }
+    this._varrendo = true;
+    this._tVigia -= dt;
+    // so escolhe novo azimute quando ja chegou perto do anterior: senao a
+    // olhada nova comeca antes de a anterior terminar e o corpo nunca assenta
+    let d = this.yawAlvo - this.yaw;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    if (this._tVigia > 0 || Math.abs(d) > 0.12) return;
+
+    if (Math.random() < 0.22) this._ladoVigia = -this._ladoVigia;
+    const [g0, g1] = VIGIA_GIRO;
+    this.yawAlvo = this.yaw + (g0 + Math.random() * (g1 - g0)) * this._ladoVigia;
+    const [e0, e1] = VIGIA_ESPERA;
+    this._tVigia = e0 + Math.random() * (e1 - e0);
   }
 
   /* --- tiro --- */
@@ -522,7 +661,12 @@ export class Enemy {
   _mover(dt) {
     const correndo = this.estado === ESTADO.PERSEGUIR || this.estado === ESTADO.FLANQUEAR
       || this.estado === ESTADO.COBERTURA;
-    const vMax = correndo ? VEL_CORRER : VEL_ANDAR;
+    /* Trote no SUSPEITO. Investigar a 2,1 m/s de um ponto a 25 m custa 12 s de
+     * caminhada mansa; com o reforco nascendo a 15 m ou mais, era isso que
+     * fazia o combate ficar RALO (medido: 56 tiros de IA em 240 s com sete
+     * hostis vivos). Nao e mais dano nem mais precisao — e chegar. */
+    const vMax = correndo ? VEL_CORRER
+      : (this.estado === ESTADO.SUSPEITO ? VEL_TROTE : VEL_ANDAR);
 
     let alvoPonto = null;
     if (this.caminho.length && this.iCaminho < this.caminho.length) {
@@ -625,11 +769,13 @@ export class Enemy {
 
     this.pos.copy(_v);
 
-    // suaviza o giro do corpo
+    /* Suaviza o giro do corpo. Varrendo o entorno o giro e LENTO: com o ganho
+     * de combate (7) um sentinela viraria 90 graus em dois quadros, o que le
+     * como teleporte de cabeca, nao como vigia olhando em volta. */
     let d = this.yawAlvo - this.yaw;
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
-    this.yaw += d * Math.min(1, dt * 7);
+    this.yaw += d * Math.min(1, dt * (this._varrendo ? VIGIA_VEL : 7));
   }
 
   _apontar(dt, alvo) {
@@ -656,6 +802,27 @@ export class Enemy {
   get eyePosition() { return this.soldado.posOlho(_olho).clone(); }
   get alive() { return this.ativo && !this.morto; }
   get position() { return this.pos; }
+
+  /* ---------------------------------------------------------------------
+   * Contrato compartilhado com o `Drone`.
+   *
+   * O drone nao tem `soldado`, nao tem esqueleto e nao tem ragdoll — mas o
+   * `AIManager` precisa tratar os dois pela MESMA lista (`vivos`), pelo mesmo
+   * orcamento de raycast, pelo mesmo LOD e pelo mesmo teto de atiradores. Estes
+   * tres acessores sao a costura: quem chama nao precisa saber qual e qual.
+   * ------------------------------------------------------------------- */
+
+  /** Objeto de cena que o manager pendura no grupo da IA. */
+  get objeto3d() { return this.soldado.grupo; }
+
+  /** Posicao dos olhos, sem alocar (o getter acima clona). */
+  posOlho(out) { return this.soldado.posOlho(out); }
+
+  /** Ocupa uma das vagas do teto de atiradores simultaneos? */
+  get ocupaVagaDeFogo() { return this.estado === ESTADO.ATIRAR; }
+
+  /** Segundos que o corpo fica em cena antes de liberar a vaga do pool. */
+  get vidaDoCorpo() { return 26; }
 
   dispose() {
     this.ragdoll?.dispose();

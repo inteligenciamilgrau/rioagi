@@ -120,7 +120,20 @@ function distSegmento(px, py, pz, s) {
 const _cor = new THREE.Color();
 const _tmpPesos = [];
 
-class Construtor {
+/**
+ * EXPORTADO para o `Drone` (mesma familia de maquina, mesmo material).
+ *
+ * O drone nao tem esqueleto: passa `ossos: []` e apaga `skinIndex`/`skinWeight`
+ * da geometria final, exatamente como `construirFuzil()` ja fazia. Com a lista
+ * vazia, `_pesos` emite (0,0,0,0)/(0,0,0,0) e nenhum peso e calculado — nao ha
+ * custo nem efeito colateral.
+ *
+ * Reusar este construtor, e nao escrever um paralelo, e o que garante que o
+ * drone tenha as MESMAS quinas chanfradas, a mesma leitura de rugosidade por
+ * vertice e a MESMA fenda ciano do soldado. Duas malhas geradas por dois
+ * codigos diferentes nao pertencem a mesma familia visual por acidente.
+ */
+export class Construtor {
   constructor() {
     this.pos = []; this.nor = []; this.uv = []; this.col = []; this.rug = [];
     this.met = []; this.emi = [];
@@ -436,7 +449,7 @@ function rgb(hex) { _cor.setHex(hex); return [_cor.r, _cor.g, _cor.b]; }
  * separa uma da outra e `casco`/`placa`; para essa diferenca chegar ao pixel,
  * o difuso tem de participar — ver o bloco de acabamentos em construirCorpo().
  */
-const PALETAS = [
+export const PALETAS = [
   { // 0 — BATEDOR
     classe: 'batedor',
     casco: 0x57616a, placa: 0x687079, chassi: 0x21242a, junta: 0x6a7178,
@@ -961,7 +974,7 @@ const ENV_ROBO = 0.30;
  * `needsUpdate` so na primeira vez — dali em diante a troca de textura e so
  * atualizacao de uniform, sem recompilar programa.
  */
-function sincronizarIBL(ctx) {
+export function sincronizarIBL(ctx) {
   const m = _matCache;
   const cena = ctx?.scene;
   if (!m || !cena) return;
@@ -975,7 +988,7 @@ function sincronizarIBL(ctx) {
   if (m.envMapIntensity !== k) m.envMapIntensity = k;
 }
 
-function materialSoldado() {
+export function materialSoldado() {
   if (_matCache) return _matCache;
   const m = new THREE.MeshStandardMaterial({
     vertexColors: true,

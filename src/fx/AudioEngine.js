@@ -250,9 +250,19 @@ const PRIO = {
   aterrissagem: 84,
   tiro: 78,          // disparo de hostil — de onde vem o perigo
   morte: 72,
+  /**
+   * Telegrafo de investida do drone. Entre `morte` e `alerta`, e o lugar dele
+   * aqui e decisao de JUSTICA, nao de gosto: e o unico aviso sonoro de que vem
+   * tiro de um inimigo que voa, para no ar por um segundo e dispara. Se um
+   * passo a 30 m ou o pente de um hostil o derrubasse, o jogador levaria a
+   * rajada sem ter tido como saber. Abaixo de `morte` porque uma baixa
+   * confirmada continua sendo a informacao mais cara de perder.
+   */
+  droneInvestida: 70,
   alerta: 66,
   recargaHostil: 64, // hostil trocando pente perto: abertura, e informacao boa
   dor: 60,
+  droneQueda: 58,    // carcaca caindo: informacao boa, mas ja aconteceu
   impacto: 56,       // bala batendo perto de voce, ou o seu acerto
   passo: 48,         // "tem maquina subindo a viela"
   cartucho: 22,
@@ -321,6 +331,10 @@ export class AudioEngine {
 
     this._bufs = new Map();       // chave -> AudioBuffer[] pronto para tocar
     this._renderizando = new Set();
+    /* Cadeia do zumbido de enxame. Nasce nula e so e montada quando o primeiro
+     * drone entra em campo — quem nunca jogar uma onda de drone nao paga por
+     * quatro osciladores rodando a partida inteira. Ver `zumbidoEnxame`. */
+    this._enxNos = null;
   }
 
   /* -------------------------------------------------------------------- */
@@ -1519,6 +1533,224 @@ export class AudioEngine {
     s.connect(hp).connect(gs).connect(ent);
   }
 
+  /* ==================================================================== */
+  /* Drone — zumbido de enxame e telegrafo de investida                    */
+  /* ==================================================================== */
+
+  /**
+   * Zumbido do enxame: UMA voz permanente para N drones.
+   *
+   * POR QUE NAO UM ZUMBIDO POR DRONE. O pool tem teto de 48 vozes posicionadas
+   * e, medido com 12 hostis a 600 rpm, ja descarta ~44% dos pedidos (ver o
+   * cabecalho deste arquivo). Um loop por drone seriam ate 10 vozes ocupadas
+   * PARA SEMPRE: som em loop nunca chega ao fim, entao nunca devolve a cadeia,
+   * nunca aparece como "quase acabando" para `_rouba` e nunca cede a vez. Dez
+   * cadeias travadas contra sons de 200 ms significa tiro e impacto perdendo
+   * disputa para zunido — o oposto exato do criterio que a tabela `PRIO` existe
+   * para garantir.
+   *
+   * E nao soaria melhor. Dez zumbidos identicos, cada um com o seu panner,
+   * somam em fase e viram uma serra plana; enxame de verdade soa como uma massa
+   * unica batendo, que e o que este no faz de proposito.
+   *
+   * COMO. Cadeia permanente montada uma vez, FORA do pool (mesmo tratamento do
+   * vento em `_montaAmbiente`, e pelo mesmo motivo: ambiente continuo nao e
+   * evento). Tres serras em frequencias de passagem de pa quase iguais — o
+   * batimento entre elas E o zumbido, nao ha modulacao escrita para isso — mais
+   * uma banda de ruido para o sopro do ar. Sai por um `PannerNode` posto no
+   * CENTROIDE do enxame.
+   *
+   * O que o chamador modula por quadro:
+   *   n         quantos drones ha         -> volume e largura do batimento
+   *   maisPerto distancia do mais proximo -> volume e corte do passa-baixa
+   *   tensao    quantos ja miram em voce  -> tom (empuxo sobe quando atacam)
+   *
+   * Custo total: 6 nos, constante, independente do tamanho do enxame. Zero
+   * vozes do pool. E `zumbidoEnxame(null, 0, 0, 0)` desliga em rampa.
+   *
+   * @param {THREE.Vector3|null} pos centroide do enxame (null = sem enxame)
+   * @param {number} n drones vivos em campo
+   * @param {number} maisPerto distancia do drone mais proximo, em metros
+   * @param {number} tensao quantos estao comprometidos com o tiro
+   */
+  zumbidoEnxame(pos, n = 0, maisPerto = 999, tensao = 0) {
+    if (!this.ativo) return;
+    if (!this._enxNos) {
+      if (n <= 0) return;         // nao monta a cadeia enquanto nao houver drone
+      this._montaEnxame();
+    }
+    const a = this.actx;
+    const t = a.currentTime;
+    const E = this._enxNos;
+
+    if (!pos || n <= 0) {
+      // rampa de saida longa: enxame nao some, se afasta
+      if (E.ganho.gain.value > 0.0002) E.ganho.gain.setTargetAtTime(0.0001, t, 0.35);
+      return;
+    }
+
+    /* Volume: cresce com o numero, mas em raiz — dez drones nao sao dez vezes
+     * mais altos que um, sao ~3 vezes. E cai com a distancia do mais proximo
+     * por uma curva propria, porque o `PannerNode` ja atenua pelo centroide e
+     * somar as duas atenuacoes deixaria o enxame inaudivel a 30 m. */
+    const porNumero = Math.min(1, Math.sqrt(n) / 2.6);
+    const porDist = Math.max(0, 1 - maisPerto / 62);
+    const alvo = 0.0001 + 0.26 * porNumero * (0.25 + 0.75 * porDist * porDist);
+    E.ganho.gain.setTargetAtTime(alvo, t, 0.12);
+
+    /* Tom: sobe com a tensao. Drone que investe acelera as pas, e o ouvido le
+     * essa subida como ameaca sem precisar de nenhuma linha de HUD. */
+    const empuxo = 1 + Math.min(0.30, tensao * 0.13);
+    for (let i = 0; i < E.osc.length; i++) {
+      E.osc[i].frequency.setTargetAtTime(E.base[i] * empuxo, t, 0.18);
+    }
+    // perto o zumbido tem agudo; longe e so o grave que atravessa o beco
+    const corte = 700 + 2600 * porDist;
+    E.lp.frequency.setTargetAtTime(corte, t, 0.2);
+
+    if (E.pan.positionX) {
+      E.pan.positionX.setTargetAtTime(pos.x, t, 0.08);
+      E.pan.positionY.setTargetAtTime(pos.y, t, 0.08);
+      E.pan.positionZ.setTargetAtTime(pos.z, t, 0.08);
+    } else if (E.pan.setPosition) E.pan.setPosition(pos.x, pos.y, pos.z);
+  }
+
+  _montaEnxame() {
+    const a = this.actx;
+    /* Nada aqui pode ser registrado como efemero (`_reg`): a primeira
+     * reciclagem de vozes desligaria o enxame inteiro. Mesmo cuidado do
+     * `_montaAmbiente`. */
+    this._vozAtual = null;
+
+    const lp = a.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 1800; lp.Q.value = 0.6;
+
+    const ganho = a.createGain();
+    ganho.gain.value = 0.0001;
+
+    const pan = a.createPanner();
+    pan.panningModel = 'equalpower';   // massa difusa nao pede binaural
+    pan.distanceModel = 'inverse';
+    pan.refDistance = 6;
+    pan.rolloffFactor = 0.9;
+    pan.maxDistance = 200;
+
+    lp.connect(ganho).connect(pan);
+    pan.connect(this.busSfx);
+    // um fio de cauda de beco: o zumbido tem de soar dentro da viela
+    const gBeco = a.createGain();
+    gBeco.gain.value = 0.22;
+    pan.connect(gBeco).connect(this.envioBeco);
+
+    /* Frequencias de passagem de pa levemente destoadas. O BATIMENTO entre
+     * 104/109/163 Hz e o que produz o "wob-wob" do enxame; escrever isso como
+     * um LFO daria um tremolo regular de brinquedo. Aqui a irregularidade vem
+     * da propria fisica de tres motores que nao giram identicos. */
+    const base = [104, 109.5, 163];
+    const osc = [];
+    for (let i = 0; i < base.length; i++) {
+      const o = a.createOscillator();
+      o.type = i === 2 ? 'square' : 'sawtooth';
+      o.frequency.value = base[i];
+      const g = a.createGain();
+      g.gain.value = i === 2 ? 0.22 : 0.5;
+      o.connect(g).connect(lp);
+      osc.push(o);
+    }
+
+    // sopro de ar: ruido em banda larga, a cama por baixo das serras
+    const ar = a.createBufferSource();
+    ar.buffer = this.bufRuido;
+    ar.loop = true;
+    ar.playbackRate.value = 1.4;
+    const arBP = a.createBiquadFilter();
+    arBP.type = 'bandpass'; arBP.frequency.value = 1250; arBP.Q.value = 0.8;
+    const arG = a.createGain();
+    arG.gain.value = 0.30;
+    ar.connect(arBP).connect(arG).connect(lp);
+
+    const t = a.currentTime + 0.03;
+    for (const o of osc) o.start(t);
+    ar.start(t);
+
+    this._enxNos = { osc, base, ar, lp, ganho, pan, gBeco, arG };
+  }
+
+  /**
+   * Telegrafo: o drone travou no ar e vai disparar.
+   *
+   * Chiado ASCENDENTE, curto, com um estalo de servo no fim. Ascendente porque
+   * e a unica forma de contorno que o ouvido le como "vai acontecer" em vez de
+   * "aconteceu" — a mesma razao por que o som de mira de todo jogo sobe.
+   * Posicionado de verdade, um por drone que ataca: sao no maximo
+   * `ai.maxAtiradores` deles simultaneos (3 ou 4), entao nao ha risco de enxame
+   * de telegrafo.
+   */
+  droneInvestida(pos) {
+    if (!this.ativo) return;
+    const a = this.actx;
+    const t0 = a.currentTime + 0.001;
+    const ent = this._voz(pos, {
+      cauda: 0.16, beco: 0.30, ganho: 0.52, vida: 0.55, alcance: 46,
+      prio: PRIO.droneInvestida,
+    });
+    if (!ent) return;
+
+    const dur = 0.34;
+    const v = 0.94 + Math.random() * 0.12;
+    // varredura ascendente em duas vozes (quinta), o "carregando"
+    for (const [f0, f1, g] of [[520, 1560, 0.5], [780, 2330, 0.26]]) {
+      const o = this._osc('sawtooth', t0, f0 * v, f1 * v, dur);
+      const bp = this._filtro('bandpass', 1500, 2.2);
+      const gn = this._ganho(0);
+      this._env(gn.gain, t0, g, 0.05, dur * 0.9);
+      o.connect(bp).connect(gn).connect(ent);
+    }
+    // ar sendo cortado enquanto ele trava
+    const s = this._ruido(t0, dur, 1.2);
+    const hp = this._filtro('highpass', 2400, 0.7);
+    const gs = this._ganho(0);
+    this._env(gs.gain, t0, 0.22, 0.08, dur * 0.8);
+    s.connect(hp).connect(gs).connect(ent);
+    // estalo de servo travando: e ele que marca o INSTANTE do travamento
+    const cl = this._ruido(t0 + dur * 0.86, 0.03, 1.6);
+    const bpc = this._filtro('bandpass', 3800, 4.0);
+    const gc = this._ganho(0);
+    this._env(gc.gain, t0 + dur * 0.86, 0.34, 0.001, 0.026);
+    cl.connect(bpc).connect(gc).connect(ent);
+  }
+
+  /** Drone abatido: guincho descendente das pas perdendo rotacao. */
+  droneQueda(pos) {
+    if (!this.ativo) return;
+    const a = this.actx;
+    const t0 = a.currentTime + 0.001;
+    const ent = this._voz(pos, {
+      cauda: 0.24, beco: 0.34, ganho: 0.6, vida: 1.1, alcance: 52,
+      prio: PRIO.droneQueda,
+    });
+    if (!ent) return;
+
+    const dur = 0.9;
+    const o = this._osc('sawtooth', t0, 330, 58, dur);
+    const lp = this._filtro('lowpass', 2200, 1.4);
+    const g = this._ganho(0);
+    this._env(g.gain, t0, 0.8, 0.006, dur);
+    o.connect(lp).connect(g).connect(ent);
+    // pa desbalanceada batendo na carenagem: ruido pulsado que desacelera
+    const s = this._ruido(t0, dur, 0.9);
+    const bp = this._filtro('bandpass', 900, 1.1);
+    const gs = this._ganho(0);
+    this._env(gs.gain, t0, 0.4, 0.01, dur * 0.85);
+    s.connect(bp).connect(gs).connect(ent);
+    // faisca eletrica curta
+    const f = this._ruido(t0 + 0.04, 0.09, 2.0);
+    const hp = this._filtro('highpass', 3600, 0.8);
+    const gf = this._ganho(0);
+    this._env(gf.gain, t0 + 0.04, 0.3, 0.002, 0.08);
+    f.connect(hp).connect(gf).connect(ent);
+  }
+
   /** Queda do jogador. `v` = velocidade vertical no impacto (m/s). */
   aterrissagem(v, superficie) {
     if (!this.ativo) return;
@@ -1898,6 +2130,12 @@ export class AudioEngine {
     this._removeGesto?.();
     for (const n of this._ambNodes || []) { try { n.stop(); } catch { /* ignora */ } }
     this._ambNodes = null;
+    if (this._enxNos) {
+      for (const o of this._enxNos.osc) { try { o.stop(); } catch { /* ignora */ } }
+      try { this._enxNos.ar.stop(); } catch { /* ignora */ }
+      try { this._enxNos.pan.disconnect(); } catch { /* ignora */ }
+      this._enxNos = null;
+    }
     for (const pool of this._pools) {
       for (const v of pool) {
         this._liberaVoz(v);
