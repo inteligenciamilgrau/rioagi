@@ -284,6 +284,29 @@ export class ViewModel {
     const meta = this.current.meta;
     const parts = meta.parts;
     const adsT = ws.adsT;
+
+    /* Arma com luneta: some da tela quando a optica assume.
+     *
+     * PORQUE: o viewmodel e desenhado POR CIMA da cena com o depth zerado (ver
+     * Engine._renderViewmodel), entao ele nao e ocluido por nada — em mira com
+     * luneta o corpo do fuzil ficava dentro do circulo da optica, comendo a
+     * metade de baixo do campo. Um atirador olhando pela luneta nao ve a
+     * propria arma; ve so o que a lente mostra.
+     *
+     * O limiar 0.6 e o MESMO que o HUD usa em `_atualizarLuneta()`. Tem de ser
+     * o mesmo numero: com limiares diferentes existiria um intervalo de adsT em
+     * que a luneta ja esta na tela e a arma ainda desenhada (ou o contrario, um
+     * quadro sem arma e sem luneta). Se um dia mudar la, mude aqui junto.
+     *
+     * `ws.weapon` JA E o def (WeaponSystem: `get weapon(){ return slot.def }`),
+     * entao e `w.scope` e nao `w.def.scope`.
+     *
+     * So a visibilidade muda; o update segue inteiro de proposito. Sair daqui
+     * com `return` congelaria as molas e, pior, a transformacao da boca do cano
+     * — e da para ATIRAR com a luneta, entao fogacho e tracante sairiam de uma
+     * posicao velha. O custo de continuar e um punhado de lerps invisiveis. */
+    this.root.visible = !(w?.scope && adsT > 0.6);
+
     const hip = HIP_POSE[wantId] ?? HIP_POSE.ia2;
     const sprintPose = SPRINT_POSE[wantId] ?? SPRINT_POSE.ia2;
 

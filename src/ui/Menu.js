@@ -154,6 +154,7 @@ export class Menu {
         <p class="op-sub">Operação em andamento</p>
         <nav class="lista-botoes">
           <button class="bt primario" data-acao="retomar"><span>Retomar</span></button>
+          <button class="bt" data-acao="destravar"><span>Destravar &mdash; estou preso</span></button>
           <button class="bt" data-acao="config"><span>Configurações</span></button>
           <button class="bt" data-acao="controles"><span>Controles</span></button>
           <button class="bt perigo" data-acao="sair"><span>Abandonar</span></button>
@@ -334,6 +335,20 @@ export class Menu {
       case 'retomar':
         this.mostrar(null);
         ctx.state = 'jogando';
+        ctx.input.requestLock();
+        ctx.bus.emit('game:resume', {});
+        break;
+      /* Saida de emergencia para quem ficou entalado em geometria — casa sem
+       * saida, vao entre muros, dobra de terreno.
+       *
+       * Chama `destravar()`, NAO `respawn()`: o respawn e a volta depois da
+       * morte e cura por completo com pente cheio, o que aqui viraria um atalho
+       * para se curar de graca no meio do tiroteio. `destravar()` so muda o
+       * jogador de lugar; vida, municao, onda e progresso seguem como estavam. */
+      case 'destravar':
+        this.mostrar(null);
+        ctx.state = 'jogando';
+        ctx.player?.destravar?.();
         ctx.input.requestLock();
         ctx.bus.emit('game:resume', {});
         break;

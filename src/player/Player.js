@@ -469,6 +469,38 @@ export class Player {
   }
 
   /**
+   * Destrava o jogador entalado em geometria (casa sem saida, vao entre muros,
+   * dobra de terreno) movendo-o para um spawn valido — e SO isso.
+   *
+   * Diferente de `respawn()`, que e a volta depois da morte e por isso zera
+   * tudo: aqui vida, municao e recarga em andamento sao preservadas. Um
+   * teleporte de emergencia nao pode valer cura completa e pente cheio, senao
+   * vira o atalho barato para se curar no meio do tiroteio — o jogador pausa,
+   * "destrava" e volta inteiro. O que ele ganha e sair do buraco, nada alem.
+   *
+   * A velocidade e zerada porque quem estava preso costuma estar acumulando
+   * queda ou empurrao da colisao, e chegar no destino com isso guardado joga o
+   * jogador longe no primeiro quadro.
+   */
+  destravar() {
+    const vida = this.health;
+    const desdeDano = this._sinceDamage;
+    const municao = this.weapons.slots.map((s) => ({ ammo: s.ammo, reserve: s.reserve }));
+
+    this.respawn();
+
+    this.health = vida;
+    this._sinceDamage = desdeDano;
+    this.weapons.slots.forEach((s, i) => {
+      if (!municao[i]) return;
+      s.ammo = municao[i].ammo;
+      s.reserve = municao[i].reserve;
+    });
+    this.movement.velocity.set(0, 0, 0);
+    this.ctx.bus?.emit('player:health', { health: this.health, max: this.maxHealth });
+  }
+
+  /**
    * Rede de seguranca: se o jogador sair por baixo do mundo por qualquer motivo
    * (buraco na colisao, teleporte ruim), devolve-o a um spawn em vez de deixar
    * cair para sempre.
