@@ -181,15 +181,40 @@ export class Buildings {
       const lx = dx * co - dz * si, lz = dx * si + dz * co;
       return Math.abs(lx) <= o.w * 0.5 + margem && Math.abs(lz) <= o.d * 0.5 + margem;
     };
-    /** O que ha embaixo do ponto (px,pz): outra casa ou o chao. */
+    /**
+     * O que ha embaixo do ponto (px,pz): laje da PROPRIA casa, telhado de outra
+     * casa, ou o chao — nesta ordem de preferencia (o pouso mais alto e o que
+     * vale, porque e o primeiro em que se cai).
+     *
+     * As lajes da propria casa entram porque o andar de cima quase sempre recua
+     * ou avanca em relacao ao de baixo (`recuoX`/`recuoZ` de -0,9 a +1,15 m):
+     * quando recua, a laje do andar de baixo JA e o degrau, e mandar construir
+     * outro seria enfeite. Ignorar isso fazia o modelo pedir escada onde a casa
+     * ja era escada.
+     */
     const pouso = (px, pz, self) => {
-      let melhor = null;
+      let melhorY = -Infinity, melhorCasa = null;
+
+      // lajes intermediarias da propria casa
+      const co = Math.cos(self.yaw), si = Math.sin(self.yaw);
+      const dxs = px - self.x, dzs = pz - self.z;
+      const lx = dxs * co - dzs * si, lz = dxs * si + dzs * co;
+      for (let k = 0; k < self.andares.length - 1; k++) {
+        const an = self.andares[k];
+        const sw = an.w * 0.5 + an.lajeSalto, sd = an.d * 0.5 + an.lajeSalto;
+        const ox = an.desloc?.[0] ?? 0, oz = an.desloc?.[1] ?? 0;
+        if (Math.abs(lx - ox) > sw || Math.abs(lz - oz) > sd) continue;
+        // topo da laje daquele andar (espessura media de 0,20 m)
+        const y = self.baseY + an.y0 + an.h + 0.20;
+        if (y < self.telhadoY - 0.15 && y > melhorY) { melhorY = y; melhorCasa = self; }
+      }
+
       for (const o of uteis) {
         if (o === self || o.telhadoY >= self.telhadoY - 0.15) continue;
         if (!dentroDe(px, pz, o, 0.15)) continue;
-        if (!melhor || o.telhadoY > melhor.telhadoY) melhor = o;
+        if (o.telhadoY > melhorY) { melhorY = o.telhadoY; melhorCasa = o; }
       }
-      if (melhor) return { y: melhor.telhadoY, casa: melhor };
+      if (melhorCasa) return { y: melhorY, casa: melhorCasa === self ? null : melhorCasa };
       return { y: this.terrain.heightAt(px, pz), casa: null };
     };
 
@@ -213,10 +238,12 @@ export class Buildings {
         const [px, pz] = pw(c, f.l[0], f.l[1]);
         const nx = f.n[0] * co + f.n[1] * si;
         const nz = -f.n[0] * si + f.n[1] * co;
-        return {
-          x: px, z: pz, nx, nz, tx: nz, tz: -nx, comp: f.comp,
-          beiral: Math.max(0, f.beiral),
-        };
+        /* `beiral` pode ser NEGATIVO — o ultimo andar recua (`recuoX` positivo) e
+         * a laje de cima fica DENTRO da planta do terreo. Nao clampar em zero:
+         * clampando, o degrau nascia ate 0,9 m alem da beirada do telhado e quem
+         * pulava da laje passava do lado dele, no vazio. O degrau tem de ficar
+         * embaixo da beirada, recuada ou avancada. */
+        return { x: px, z: pz, nx, nz, tx: nz, tz: -nx, comp: f.comp, beiral: f.beiral };
       });
     };
 
@@ -233,7 +260,7 @@ export class Buildings {
      * para fora. */
     const testaDescida = (c) => {
       for (const f of faces(c)) {
-        const fora = f.beiral + 0.55;
+        const fora = Math.max(0.3, f.beiral + 0.55);
         for (const t of [-0.3, 0, 0.3]) {
           const px = f.x + f.nx * fora + f.tx * t * f.comp;
           const pz = f.z + f.nz * fora + f.tz * t * f.comp;
@@ -266,9 +293,9 @@ export class Buildings {
        * e nao debaixo do beiral. */
       let alvo = null;
       for (const f of faces(c)) {
-        const saida = f.beiral + SAIDA;
+        const saida = Math.max(0.45, f.beiral + SAIDA);
         let livre = true;
-        for (const dd of [f.beiral + 0.3, saida, saida + PROF * 0.5 + 0.15]) {
+        for (const dd of [Math.max(0.25, f.beiral + 0.3), saida, saida + PROF * 0.5 + 0.15]) {
           const px = f.x + f.nx * dd, pz = f.z + f.nz * dd;
           for (const o of uteis) {
             if (o === c) continue;
@@ -302,11 +329,26 @@ export class Buildings {
         _m.setPosition(px, yD, pz);
         this.bat.add(g, _m, 'concreto', { uvScale: 1 });
         this.col.addBox(px, yD, pz, larg, ESP, PROF, yawD, 'concreto');
-        // mao-francesa: o degrau em balanco precisa parecer que para em pe
-        const gb = chamferBox(larg * 0.28, 0.34, 0.34, 0.015, { taper: 0.5 });
+        /* Mao-francesa + costela ate a parede.
+         *
+         * Sem elas o degrau le como caixa cinza FLUTUANDO (visto em
+         * shots/descida-degraus.png): a laje em balanco existe no mundo real,
+         * mas so convence quando se ve o que a segura. A costela vai do degrau
+         * ate a face da parede, entao a peca sempre encosta em alguma coisa,
+         * inclusive quando o andar de cima recua e o degrau nasce afastado.
+         * Nenhuma das duas entra na colisao — sao leitura, nao caminho. */
+        const recuoParede = alvo.saida + PROF * 0.5;
+        const gb = chamferBox(larg * 0.30, 0.62, 0.55, 0.02, { taper: 0.72 });
         _m.makeRotationY(yawD);
-        _m.setPosition(px - alvo.f.nx * (PROF * 0.5 - 0.25), yD - 0.22, pz - alvo.f.nz * (PROF * 0.5 - 0.25));
+        _m.setPosition(px - alvo.f.nx * (PROF * 0.5 - 0.22), yD - 0.36, pz - alvo.f.nz * (PROF * 0.5 - 0.22));
         this.bat.add(gb, _m, 'concreto', { uvScale: 1 });
+
+        const gc = chamferBox(larg * 0.22, 0.22, Math.max(0.25, recuoParede), 0.015);
+        _m.makeRotationY(yawD);
+        _m.setPosition(px - alvo.f.nx * (recuoParede * 0.5), yD - 0.12, pz - alvo.f.nz * (recuoParede * 0.5));
+        this.bat.add(gc, _m, 'concreto', { uvScale: 1 });
+        // etiqueta para as ferramentas acharem a descida sem adivinhar
+        (c.degrausFuga || (c.degrausFuga = [])).push({ x: px, y: nY[k], z: pz });
         stats.degraus++;
       }
       desce.set(c, true);

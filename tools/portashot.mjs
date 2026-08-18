@@ -74,7 +74,18 @@ async function posar(olho, alvo, quadros = 40) {
   return p.evaluate(({ olho, alvo, quadros }) => {
     const ctx = window.__game.ctx;
     const pl = ctx.player;
-    pl.movement.teleport(olho[0], olho[1] - 1.68, olho[2]);
+    /* Os pes vao no CHAO daquele (x,z), medido com raio.
+     * Teleportar para `olho.y - 1.68` deixava o jogador no ar e ele caia durante
+     * os quadros simulados: a foto saia de outro lugar, e a dica de acao (que
+     * depende da distancia ate a porta) sumia. */
+    /* O raio parte da propria altura do olho, e nao de 2,5 m acima: comecando
+     * acima do telhado ele acha a LAJE e a foto de dentro da casa vira foto em
+     * cima dela. */
+    const V = ctx.world.group.position.constructor;
+    const h = ctx.world.collision.raycast(
+      new V(olho[0], olho[1] + 0.15, olho[2]), new V(0, -1, 0), 8);
+    const pesY = h.hit ? h.point.y + 0.02 : olho[1] - 1.68;
+    pl.movement.teleport(olho[0], pesY, olho[2]);
     pl.movement.velocity.set(0, 0, 0);
     const dx = alvo[0] - olho[0], dy = alvo[1] - olho[1], dz = alvo[2] - olho[2];
     const yaw = Math.atan2(-dx, -dz);
@@ -111,12 +122,14 @@ const cena = await p.evaluate(() => {
   }
   if (!melhor) return null;
   const { q, cx, cz, d } = melhor;
-  const rec = Math.min(3.0, Math.max(1.9, d - 0.6));
+  /* 1,55 m da folha: dentro do alcance de 2,1 m da acao, com a porta inteira
+   * no enquadramento. Mais longe a dica nao acende — e ela e metade da foto. */
+  const rec = Math.min(1.75, Math.max(1.2, d - 0.5));
   return {
     livre: +d.toFixed(2),
     fora: [cx + q.nx * rec, q.eixo.y + 1.68, cz + q.nz * rec],
-    dentro: [cx - q.nx * 1.7, q.eixo.y + 1.68, cz - q.nz * 1.7],
-    alvo: [cx, q.eixo.y + 1.15, cz],
+    dentro: [cx - q.nx * 1.5, q.eixo.y + 1.68, cz - q.nz * 1.5],
+    alvo: [cx, q.eixo.y + 1.05, cz],
     casa: [+q.casa.x.toFixed(1), +q.casa.z.toFixed(1)],
   };
 });
@@ -148,34 +161,39 @@ if (cena) {
 /* --------------------------------------------------------------- descida */
 const tel = await p.evaluate(() => {
   const w = window.__game.ctx.world;
-  const V = w.group.position.constructor;
-  // casa que GANHOU degraus de fuga: procura laje com degrau logo ao lado
-  const casas = w.favela.casas.filter((c) => typeof c.telhadoY === 'number');
+  /* Casas que GANHARAM degraus de fuga sao etiquetadas por `degrausDeFuga`.
+   * Escolhemos a de maior desnivel com pelo menos dois degraus: e onde a
+   * escadinha se le como escadinha, e nao como uma laje solta. */
   let melhor = null;
-  for (const c of casas) {
-    if (c.telhadoY - c.baseY < 4.5) continue;              // queria queda visivel
-    const co = Math.cos(c.yaw), si = Math.sin(c.yaw);
-    for (const [lx, lz] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
-      const nx = lx * co + lz * si, nz = -lx * si + lz * co;
-      const half = (lx === 0 ? c.d : c.w) * 0.5;
-      const px = c.x + nx * (half + 1.1), pz = c.z + nz * (half + 1.1);
-      // ha superficie de concreto entre o telhado e o chao neste ponto?
-      const h = w.collision.raycast(new V(px, c.telhadoY - 0.4, pz), new V(0, -1, 0), 6);
-      if (!h.hit) continue;
-      const alturaDeg = h.point.y;
-      const solo = w.terrain.heightAt(px, pz);
-      if (alturaDeg - solo < 1.6) continue;
-      if (c.telhadoY - alturaDeg > 2.6) continue;
+  for (const c of w.favela.casas) {
+    if (!c.degrausFuga || c.degrausFuga.length < 2) continue;
+    // longe da borda do mapa: no limite a casa aparece contra a "saia" do
+    // terreno e o fundo vira neblina, o que nao mostra nada
+    if (Math.hypot(c.x, c.z) > 58) continue;
+    const alto = c.degrausFuga[c.degrausFuga.length - 1];
+    const baixo = c.degrausFuga[0];
+    const salto = c.telhadoY - baixo.y;
+    if (!melhor || salto > melhor.salto) {
+      // camera afastada na perpendicular da parede, na altura do degrau do meio
+      const dx = alto.x - c.x, dz = alto.z - c.z;
+      const l = Math.hypot(dx, dz) || 1;
       melhor = {
+        salto: +salto.toFixed(2),
         casa: [+c.x.toFixed(1), +c.z.toFixed(1)],
-        telhadoY: +c.telhadoY.toFixed(2), degrauY: +alturaDeg.toFixed(2), solo: +solo.toFixed(2),
-        // camera de fora, na altura do degrau, olhando a parede
-        olho: [px + nx * 6.5, alturaDeg + 2.2, pz + nz * 6.5],
-        alvo: [px, alturaDeg - 0.2, pz],
+        n: c.degrausFuga.length,
+        telhadoY: +c.telhadoY.toFixed(2),
+        degraus: c.degrausFuga.map((d) => [+d.x.toFixed(1), +d.y.toFixed(2), +d.z.toFixed(1)]),
+        /* Vista de fora: ALTA e recuada, olhando a fachada de cima para baixo.
+         * Na altura dos degraus a camera cai dentro da casa vizinha — a favela e
+         * colada, e um beco de 1,3 m nao tem de onde fotografar de frente. */
+        olho: [c.x + (dx / l) * 7.5, alto.y + 7.5, c.z + (dz / l) * 7.5],
+        alvo: [(alto.x + baixo.x) * 0.5, (alto.y + baixo.y) * 0.5, (alto.z + baixo.z) * 0.5],
+        /* Segunda tomada: de cima da laje, na BEIRADA, olhando para baixo.
+         * E a pergunta do jogador — "da para descer daqui?" — enquadrada. */
+        deCima: [c.x + (dx / l) * (l - 0.9), c.telhadoY + 1.68, c.z + (dz / l) * (l - 0.9)],
+        alvoCima: [alto.x, alto.y - 0.6, alto.z],
       };
-      break;
     }
-    if (melhor) break;
   }
   return melhor;
 });
@@ -187,14 +205,21 @@ if (tel) {
     window.__game.settle(16);
   }, tel);
   await p.waitForTimeout(200);
-  await p.screenshot({ path: `${ROOT}/shots/descida-degraus.png` });
+  await p.screenshot({ path: `${ROOT}/shots/descida-telhados.png` });
 
-  // vista de cima da laje, olhando a propria descida
-  await p.evaluate(({ casa, telhadoY, degrauY }) => {
-    const w = window.__game.ctx.world;
-    const c = w.favela.casas.find((k) => Math.abs(k.x - casa[0]) < 0.2 && Math.abs(k.z - casa[1]) < 0.2);
-    void c; void telhadoY; void degrauY;
-  }, tel);
+  // 1) da beirada da laje, olhando o primeiro degrau
+  const rc = await posar(tel.deCima, tel.alvoCima, 30);
+  console.log('  da laje:', JSON.stringify(rc));
+  await p.screenshot({ path: `${ROOT}/shots/descida-da-laje.png` });
+
+  // 2) EM CIMA de um degrau do meio, olhando o proximo — o passo seguinte da
+  //    descida, que e onde se ve que a escadinha continua
+  const meio = tel.degraus[Math.max(0, tel.degraus.length - 3)];
+  const abaixo = tel.degraus[Math.max(0, tel.degraus.length - 4)];
+  const rd = await posar([meio[0], meio[1] + 1.68, meio[2]],
+    [abaixo[0], abaixo[1] + 0.1, abaixo[2]], 24);
+  console.log('  no degrau:', JSON.stringify(rd));
+  await p.screenshot({ path: `${ROOT}/shots/descida-no-degrau.png` });
 }
 
 await b.close();

@@ -12,23 +12,23 @@
   "meshesMerged": 170,
   "meshesInstanced": 121,
   "objetosCena": 301,
-  "triangulos": 2221852,
-  "trisColisao": 95524,
+  "triangulos": 2212964,
+  "trisColisao": 94312,
   "spawns": 80,
   "coberturas": 1060,
   "portas": 19,
-  "degrausFuga": 519,
-  "telhadosTratados": 239,
+  "degrausFuga": 418,
+  "telhadosTratados": 240,
   "cotaMin": -3.37,
   "cotaMax": 35.72,
-  "msGeracao": 2537
+  "msGeracao": 2179
  },
  "nCasas": 293,
  "nInterior": 19,
  "nTunel": 7,
- "nNos": 185789,
- "nLivres": 114107,
- "chaoPreso": 17,
+ "nNos": 185361,
+ "nLivres": 113228,
+ "chaoPreso": 15,
  "interiores": [
   {
    "i": 79,
@@ -199,9 +199,9 @@
    "tunel": false,
    "andares": 3,
    "dentro": true,
-   "saiu": true,
-   "voltou": true,
-   "det": "",
+   "saiu": false,
+   "voltou": false,
+   "det": "preso: alcancou 2.99 m do centro (planta 5.4x4.9)",
    "nPortas": 1,
    "acaoDentro": true,
    "acaoFora": true
@@ -216,7 +216,7 @@
    "andares": 3,
    "dentro": true,
    "saiu": false,
-   "voltou": true,
+   "voltou": false,
    "det": "preso: alcancou 2.29 m do centro (planta 5.1x3.0)",
    "nPortas": 1,
    "acaoDentro": true,
@@ -456,11 +456,11 @@
    "andares": 4,
    "altura": 11.1,
    "nos": 125,
-   "presos": 0,
+   "presos": 125,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.09,
+   "pior": 2.93,
    "yTelhado": 16.3
   },
   {
@@ -530,12 +530,12 @@
    "topo": "fibro",
    "andares": 2,
    "altura": 5.9,
-   "nos": 80,
-   "presos": 80,
+   "nos": 82,
+   "presos": 2,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.57,
+   "pior": 3.15,
    "yTelhado": 5.2
   },
   {
@@ -545,7 +545,7 @@
    "topo": "laje",
    "andares": 4,
    "altura": 11.7,
-   "nos": 124,
+   "nos": 121,
    "presos": 121,
    "alc": 0,
    "alcPresos": 0,
@@ -565,7 +565,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.21,
+   "pior": 2.12,
    "yTelhado": 9.1
   },
   {
@@ -635,12 +635,12 @@
    "topo": "laje",
    "andares": 3,
    "altura": 8.3,
-   "nos": 137,
-   "presos": 0,
+   "nos": 136,
+   "presos": 136,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2,
+   "pior": 3.02,
    "yTelhado": 16.1
   },
   {
@@ -655,7 +655,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 4,
+   "pior": 4.01,
    "yTelhado": 16
   },
   {
@@ -695,12 +695,12 @@
    "topo": "fibro",
    "andares": 4,
    "altura": 11.6,
-   "nos": 115,
-   "presos": 115,
+   "nos": 117,
+   "presos": 117,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.78,
+   "pior": 2.57,
    "yTelhado": 23.2
   },
   {
@@ -741,11 +741,11 @@
    "andares": 1,
    "altura": 2.7,
    "nos": 397,
-   "presos": 4,
+   "presos": 1,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.88,
+   "pior": 2.83,
    "yTelhado": 37.1
   },
   {
@@ -785,13 +785,13 @@
    "topo": "fibro",
    "andares": 2,
    "altura": 5.4,
-   "nos": 163,
+   "nos": 152,
    "presos": 0,
-   "alc": 155,
+   "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2,
-   "yTelhado": 36.6
+   "pior": 1.71,
+   "yTelhado": 34.7
   },
   {
    "i": 23,
@@ -815,8 +815,8 @@
    "topo": "laje",
    "andares": 3,
    "altura": 8.8,
-   "nos": 111,
-   "presos": 111,
+   "nos": 113,
+   "presos": 113,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
@@ -891,11 +891,11 @@
    "andares": 3,
    "altura": 8.1,
    "nos": 420,
-   "presos": 417,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.53,
+   "pior": 2.06,
    "yTelhado": 40
   },
   {
@@ -905,7 +905,7 @@
    "topo": "laje",
    "andares": 2,
    "altura": 5.7,
-   "nos": 177,
+   "nos": 178,
    "presos": 0,
    "alc": 0,
    "alcPresos": 0,
@@ -1015,7 +1015,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2,
+   "pior": 2.23,
    "yTelhado": 8.5
   },
   {
@@ -1025,7 +1025,7 @@
    "topo": "laje",
    "andares": 3,
    "altura": 9,
-   "nos": 118,
+   "nos": 121,
    "presos": 118,
    "alc": 0,
    "alcPresos": 0,
@@ -1101,11 +1101,11 @@
    "andares": 4,
    "altura": 11.3,
    "nos": 195,
-   "presos": 0,
+   "presos": 195,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2,
+   "pior": 3.53,
    "yTelhado": 9.7
   },
   {
@@ -1116,11 +1116,11 @@
    "andares": 2,
    "altura": 5.9,
    "nos": 274,
-   "presos": 274,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.03,
+   "pior": 2.23,
    "yTelhado": 5.3
   },
   {
@@ -1240,7 +1240,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.8,
+   "pior": 3.34,
    "yTelhado": 21.5
   },
   {
@@ -1250,12 +1250,12 @@
    "topo": "barro",
    "andares": 3,
    "altura": 8.9,
-   "nos": 62,
+   "nos": 60,
    "presos": 60,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.5,
+   "pior": 2.69,
    "yTelhado": 24.7
   },
   {
@@ -1280,12 +1280,12 @@
    "topo": "laje",
    "andares": 1,
    "altura": 2.8,
-   "nos": 182,
-   "presos": 0,
+   "nos": 178,
+   "presos": 1,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.33,
+   "pior": 3.24,
    "yTelhado": 32.7
   },
   {
@@ -1401,11 +1401,11 @@
    "andares": 2,
    "altura": 5.6,
    "nos": 90,
-   "presos": 90,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.85,
+   "pior": 2,
    "yTelhado": 25.6
   },
   {
@@ -1415,12 +1415,12 @@
    "topo": "laje",
    "andares": 3,
    "altura": 8.9,
-   "nos": 155,
-   "presos": 155,
+   "nos": 156,
+   "presos": 156,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.05,
+   "pior": 2.59,
    "yTelhado": 26.3
   },
   {
@@ -1435,7 +1435,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.76,
+   "pior": 2.75,
    "yTelhado": 26.3
   },
   {
@@ -1495,7 +1495,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 1.74,
+   "pior": 1.33,
    "yTelhado": 31.3
   },
   {
@@ -1506,11 +1506,11 @@
    "andares": 2,
    "altura": 5.8,
    "nos": 168,
-   "presos": 168,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.92,
+   "pior": 1.55,
    "yTelhado": 35.8
   },
   {
@@ -1630,7 +1630,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 4,
+   "pior": 4.06,
    "yTelhado": 7.7
   },
   {
@@ -1640,13 +1640,13 @@
    "topo": "laje",
    "andares": 2,
    "altura": 6.1,
-   "nos": 78,
-   "presos": 78,
+   "nos": 74,
+   "presos": 74,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
    "pior": 3.12,
-   "yTelhado": 11.9
+   "yTelhado": 9.8
   },
   {
    "i": 80,
@@ -1685,8 +1685,8 @@
    "topo": "laje",
    "andares": 3,
    "altura": 8.3,
-   "nos": 226,
-   "presos": 226,
+   "nos": 227,
+   "presos": 227,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
@@ -1780,7 +1780,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 1.67,
+   "pior": 2.19,
    "yTelhado": 19.9
   },
   {
@@ -1805,12 +1805,12 @@
    "topo": "barro",
    "andares": 3,
    "altura": 8.6,
-   "nos": 45,
-   "presos": 0,
+   "nos": 47,
+   "presos": 47,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.33,
+   "pior": 3.24,
    "yTelhado": 32.7
   },
   {
@@ -1895,13 +1895,13 @@
    "topo": "laje",
    "andares": 1,
    "altura": 3,
-   "nos": 195,
+   "nos": 191,
    "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2,
-   "yTelhado": 38.4
+   "pior": 1.96,
+   "yTelhado": 33.6
   },
   {
    "i": 97,
@@ -1940,12 +1940,12 @@
    "topo": "laje",
    "andares": 4,
    "altura": 11.3,
-   "nos": 155,
-   "presos": 155,
+   "nos": 156,
+   "presos": 156,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.69,
+   "pior": 3.17,
    "yTelhado": 16.1
   },
   {
@@ -1955,13 +1955,13 @@
    "topo": "fibro",
    "andares": 1,
    "altura": 3,
-   "nos": 240,
+   "nos": 236,
    "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.09,
-   "yTelhado": 27.1
+   "pior": 1.86,
+   "yTelhado": 25
   },
   {
    "i": 101,
@@ -1985,7 +1985,7 @@
    "topo": "laje",
    "andares": 3,
    "altura": 8.7,
-   "nos": 53,
+   "nos": 54,
    "presos": 53,
    "alc": 0,
    "alcPresos": 0,
@@ -2060,12 +2060,12 @@
    "topo": "fibro",
    "andares": 2,
    "altura": 5.8,
-   "nos": 243,
-   "presos": 240,
+   "nos": 248,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.82,
+   "pior": 2.23,
    "yTelhado": 38.3
   },
   {
@@ -2091,11 +2091,11 @@
    "andares": 1,
    "altura": 3,
    "nos": 222,
-   "presos": 3,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.54,
+   "pior": 2.35,
    "yTelhado": 9.2
   },
   {
@@ -2135,13 +2135,13 @@
    "topo": "laje",
    "andares": 1,
    "altura": 2.9,
-   "nos": 48,
+   "nos": 47,
    "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
    "pior": 1.75,
-   "yTelhado": 33.6
+   "yTelhado": 32.7
   },
   {
    "i": 113,
@@ -2420,9 +2420,9 @@
    "topo": "barro",
    "andares": 1,
    "altura": 2.8,
-   "nos": 244,
+   "nos": 243,
    "presos": 1,
-   "alc": 240,
+   "alc": 239,
    "alcPresos": 0,
    "semSaida": 0,
    "pior": 2.8,
@@ -2495,7 +2495,7 @@
    "topo": "fibro",
    "andares": 2,
    "altura": 5.8,
-   "nos": 66,
+   "nos": 69,
    "presos": 1,
    "alc": 0,
    "alcPresos": 0,
@@ -2525,8 +2525,8 @@
    "topo": "laje",
    "andares": 2,
    "altura": 5.7,
-   "nos": 130,
-   "presos": 8,
+   "nos": 131,
+   "presos": 9,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
@@ -2590,7 +2590,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.02,
+   "pior": 1.96,
    "yTelhado": 33.9
   },
   {
@@ -2632,10 +2632,10 @@
    "altura": 5.3,
    "nos": 124,
    "presos": 0,
-   "alc": 118,
+   "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 1.43,
+   "pior": 1.71,
    "yTelhado": 36.1
   },
   {
@@ -2645,12 +2645,12 @@
    "topo": "fibro",
    "andares": 2,
    "altura": 5.6,
-   "nos": 209,
-   "presos": 205,
+   "nos": 205,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.58,
+   "pior": 2.07,
    "yTelhado": 39.8
   },
   {
@@ -2660,8 +2660,8 @@
    "topo": "barro",
    "andares": 1,
    "altura": 2.7,
-   "nos": 297,
-   "presos": 13,
+   "nos": 301,
+   "presos": 17,
    "alc": 263,
    "alcPresos": 0,
    "semSaida": 0,
@@ -2675,8 +2675,8 @@
    "topo": "barro",
    "andares": 3,
    "altura": 8.4,
-   "nos": 67,
-   "presos": 67,
+   "nos": 66,
+   "presos": 66,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
@@ -2695,7 +2695,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2,
+   "pior": 2.16,
    "yTelhado": 9.3
   },
   {
@@ -2720,13 +2720,13 @@
    "topo": "laje",
    "andares": 1,
    "altura": 3,
-   "nos": 307,
-   "presos": 0,
+   "nos": 309,
+   "presos": 3,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.23,
-   "yTelhado": 38
+   "pior": 2.53,
+   "yTelhado": 38.1
   },
   {
    "i": 152,
@@ -2750,7 +2750,7 @@
    "topo": "laje",
    "andares": 3,
    "altura": 9,
-   "nos": 108,
+   "nos": 110,
    "presos": 108,
    "alc": 0,
    "alcPresos": 0,
@@ -2916,11 +2916,11 @@
    "andares": 1,
    "altura": 2.9,
    "nos": 153,
-   "presos": 5,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.02,
+   "pior": 1.96,
    "yTelhado": 36.6
   },
   {
@@ -3021,11 +3021,11 @@
    "andares": 3,
    "altura": 8.8,
    "nos": 99,
-   "presos": 99,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.88,
+   "pior": 2.37,
    "yTelhado": 38.7
   },
   {
@@ -3036,11 +3036,11 @@
    "andares": 3,
    "altura": 9.2,
    "nos": 69,
-   "presos": 69,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.89,
+   "pior": 2.15,
    "yTelhado": 45.4
   },
   {
@@ -3051,7 +3051,7 @@
    "andares": 2,
    "altura": 5.7,
    "nos": 36,
-   "presos": 36,
+   "presos": 28,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
@@ -3066,11 +3066,11 @@
    "andares": 3,
    "altura": 8.1,
    "nos": 82,
-   "presos": 0,
+   "presos": 82,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.21,
+   "pior": 2.7,
    "yTelhado": 13.1
   },
   {
@@ -3141,11 +3141,11 @@
    "andares": 2,
    "altura": 6.2,
    "nos": 93,
-   "presos": 93,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.91,
+   "pior": 2.37,
    "yTelhado": 38.7
   },
   {
@@ -3216,11 +3216,11 @@
    "andares": 4,
    "altura": 10.9,
    "nos": 82,
-   "presos": 82,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.53,
+   "pior": 2.06,
    "yTelhado": 40.6
   },
   {
@@ -3261,11 +3261,11 @@
    "andares": 3,
    "altura": 7.8,
    "nos": 94,
-   "presos": 94,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.54,
+   "pior": 1.86,
    "yTelhado": 7.9
   },
   {
@@ -3290,7 +3290,7 @@
    "topo": "laje",
    "andares": 2,
    "altura": 5.5,
-   "nos": 138,
+   "nos": 140,
    "presos": 1,
    "alc": 0,
    "alcPresos": 0,
@@ -3321,11 +3321,11 @@
    "andares": 2,
    "altura": 6,
    "nos": 94,
-   "presos": 94,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.02,
+   "pior": 1.96,
    "yTelhado": 38.1
   },
   {
@@ -3350,13 +3350,13 @@
    "topo": "laje",
    "andares": 2,
    "altura": 5.5,
-   "nos": 86,
+   "nos": 85,
    "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
    "pior": 2.2,
-   "yTelhado": 12.3
+   "yTelhado": 11.4
   },
   {
    "i": 194,
@@ -3395,12 +3395,12 @@
    "topo": "laje",
    "andares": 4,
    "altura": 11.7,
-   "nos": 68,
+   "nos": 69,
    "presos": 68,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.04,
+   "pior": 2.57,
    "yTelhado": 18.2
   },
   {
@@ -3441,11 +3441,11 @@
    "andares": 4,
    "altura": 11.5,
    "nos": 47,
-   "presos": 43,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.03,
+   "pior": 2.5,
    "yTelhado": 12.6
   },
   {
@@ -3470,13 +3470,13 @@
    "topo": "fibro",
    "andares": 1,
    "altura": 3.1,
-   "nos": 148,
-   "presos": 5,
+   "nos": 119,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 4.09,
-   "yTelhado": 9.3
+   "pior": 2.03,
+   "yTelhado": 1.2
   },
   {
    "i": 202,
@@ -3485,12 +3485,12 @@
    "topo": "laje",
    "andares": 4,
    "altura": 11.8,
-   "nos": 156,
-   "presos": 156,
+   "nos": 158,
+   "presos": 158,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.92,
+   "pior": 2.88,
    "yTelhado": 31.8
   },
   {
@@ -3560,8 +3560,8 @@
    "topo": "laje",
    "andares": 3,
    "altura": 8.6,
-   "nos": 59,
-   "presos": 59,
+   "nos": 62,
+   "presos": 62,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
@@ -3605,12 +3605,12 @@
    "topo": "barro",
    "andares": 2,
    "altura": 5.4,
-   "nos": 291,
-   "presos": 0,
+   "nos": 292,
+   "presos": 1,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.43,
+   "pior": 3.27,
    "yTelhado": 40.3
   },
   {
@@ -3681,11 +3681,11 @@
    "andares": 3,
    "altura": 9.2,
    "nos": 110,
-   "presos": 0,
+   "presos": 110,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.08,
+   "pior": 3.07,
    "yTelhado": 31
   },
   {
@@ -3711,11 +3711,11 @@
    "andares": 4,
    "altura": 12.4,
    "nos": 41,
-   "presos": 0,
+   "presos": 41,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.03,
+   "pior": 3.6,
    "yTelhado": 12.6
   },
   {
@@ -3730,7 +3730,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.74,
+   "pior": 2.57,
    "yTelhado": 18
   },
   {
@@ -3785,7 +3785,7 @@
    "topo": "laje",
    "andares": 3,
    "altura": 8.2,
-   "nos": 176,
+   "nos": 179,
    "presos": 0,
    "alc": 160,
    "alcPresos": 0,
@@ -3846,11 +3846,11 @@
    "andares": 3,
    "altura": 8.8,
    "nos": 33,
-   "presos": 32,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.13,
+   "pior": 2.46,
    "yTelhado": 35.7
   },
   {
@@ -3860,7 +3860,7 @@
    "topo": "laje",
    "andares": 3,
    "altura": 9.1,
-   "nos": 135,
+   "nos": 136,
    "presos": 0,
    "alc": 0,
    "alcPresos": 0,
@@ -3980,13 +3980,13 @@
    "topo": "laje",
    "andares": 1,
    "altura": 3,
-   "nos": 63,
-   "presos": 0,
+   "nos": 52,
+   "presos": 2,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.39,
-   "yTelhado": 31.1
+   "pior": 2.68,
+   "yTelhado": 28.6
   },
   {
    "i": 236,
@@ -4041,11 +4041,11 @@
    "andares": 3,
    "altura": 8.4,
    "nos": 66,
-   "presos": 66,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.88,
+   "pior": 2.37,
    "yTelhado": 39.5
   },
   {
@@ -4085,7 +4085,7 @@
    "topo": "laje",
    "andares": 3,
    "altura": 8.5,
-   "nos": 36,
+   "nos": 37,
    "presos": 36,
    "alc": 0,
    "alcPresos": 0,
@@ -4100,13 +4100,13 @@
    "topo": "laje",
    "andares": 2,
    "altura": 5.5,
-   "nos": 89,
+   "nos": 83,
    "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2,
-   "yTelhado": 8.9
+   "pior": 2.23,
+   "yTelhado": 8.8
   },
   {
    "i": 244,
@@ -4120,7 +4120,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.74,
+   "pior": 2.57,
    "yTelhado": 22
   },
   {
@@ -4145,13 +4145,13 @@
    "topo": "laje",
    "andares": 2,
    "altura": 5.8,
-   "nos": 48,
+   "nos": 45,
    "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.36,
-   "yTelhado": 28.7
+   "pior": 2.09,
+   "yTelhado": 27.8
   },
   {
    "i": 247,
@@ -4165,7 +4165,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.32,
+   "pior": 2.82,
    "yTelhado": 28.9
   },
   {
@@ -4176,11 +4176,11 @@
    "andares": 3,
    "altura": 8.9,
    "nos": 65,
-   "presos": 0,
+   "presos": 65,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.23,
+   "pior": 3.12,
    "yTelhado": 41.6
   },
   {
@@ -4210,7 +4210,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.74,
+   "pior": 2.57,
    "yTelhado": 20
   },
   {
@@ -4220,12 +4220,12 @@
    "topo": "laje",
    "andares": 2,
    "altura": 5.9,
-   "nos": 84,
+   "nos": 82,
    "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.09,
+   "pior": 2.49,
    "yTelhado": 14.1
   },
   {
@@ -4285,7 +4285,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.02,
+   "pior": 1.96,
    "yTelhado": 35.6
   },
   {
@@ -4356,11 +4356,11 @@
    "andares": 2,
    "altura": 5.4,
    "nos": 97,
-   "presos": 97,
+   "presos": 0,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.03,
+   "pior": 2.23,
    "yTelhado": 4.3
   },
   {
@@ -4475,12 +4475,12 @@
    "topo": "barro",
    "andares": 4,
    "altura": 10.6,
-   "nos": 33,
-   "presos": 0,
+   "nos": 34,
+   "presos": 34,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2,
+   "pior": 3.14,
    "yTelhado": 37.3
   },
   {
@@ -4505,13 +4505,13 @@
    "topo": "laje",
    "andares": 1,
    "altura": 2.9,
-   "nos": 60,
+   "nos": 55,
    "presos": 0,
    "alc": 55,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.3,
-   "yTelhado": 34
+   "pior": 0,
+   "yTelhado": 31.7
   },
   {
    "i": 271,
@@ -4570,7 +4570,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.59,
+   "pior": 2.63,
    "yTelhado": 35.7
   },
   {
@@ -4735,7 +4735,7 @@
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 3.89,
+   "pior": 2.91,
    "yTelhado": 22.3
   },
   {
@@ -4760,12 +4760,12 @@
    "topo": "fibro",
    "andares": 3,
    "altura": 9.4,
-   "nos": 206,
-   "presos": 206,
+   "nos": 207,
+   "presos": 207,
    "alc": 0,
    "alcPresos": 0,
    "semSaida": 0,
-   "pior": 2.61,
+   "pior": 2.89,
    "yTelhado": 18
   },
   {

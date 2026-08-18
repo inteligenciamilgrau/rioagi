@@ -351,3 +351,130 @@ sombra em sol/hemisferica/IBL/grade) · `chaoprova.mjs` (B-R por faixa clara e
 escura, superficie por superficie, sol e sombra rotulados por medicao) ·
 `varrechao.mjs` (varredura de parametros) · `luzab.mjs` (A/B visual no mesmo
 boot e no mesmo enquadramento) · `robofenda.mjs` (nao-regressao da fenda).
+
+---
+
+## [WORLD/portas] Casa sem saida: causa medida, porta que abre, descida do telhado
+
+**As duas armadilhas eram DIFERENTES, e so uma era um defeito duro.**
+
+### 1. "Entrei e nao consigo sair" — era real, e era da colisao
+
+`Buildings._colParede` adicionava **UMA caixa macica do comprimento inteiro da
+parede**. Porta e janela existiam so na malha visual; a colisao nao sabia dos
+vaos. Casa com `interior` era, na pratica, uma caixa lacrada. Medido com
+`tools/casas.mjs` (BFS de caminhada com `capsuleSweep` de verdade, celula de
+0,25 m): **23 de 26 casas com interior/tunel reprovavam**, 19 delas prendendo a
+capsula no miolo.
+
+Somaram-se a isso quatro causas menores, todas medidas com `tools/porta.mjs`
+(sonda de 10 em 10 cm no eixo da porta, separando quem empurra — BVH ou folha):
+
+- **verga baixa demais.** O beco sobe 0,33 m ao longo da soleira; a verga
+  desenhada a 2,10 m do piso INTERNO deixava 1,77 m de pe-direito para quem
+  vinha de fora, e a capsula tem 1,80. A casa ficava lacrada por 3 cm de cabeca.
+  Agora **o vao de porta na colisao vai do piso ao teto do andar** — a verga
+  continua na malha visual e passa 9 cm acima do olho no pior caso.
+- **soleira de 0,74 m.** `baseY = min + 0,62*(max-min)` com achatamento de so
+  94% da planta deixa o piso do terreo bem acima do beco, e ainda abre um
+  ENTALHE colado na parede (casa #125: piso 25,10 · 10 cm da parede 23,90 ·
+  meio metro adiante 24,76). `Buildings._soleira` agora poe 1 a 5 degraus de
+  concreto, medindo o PIOR de quatro amostras e assentando cada degrau num
+  bloco cheio que tapa o entalhe.
+- **muro de divisa na frente da porta** (casa #110): entalava a capsula entre a
+  folha e o muro. `Favela._muros` agora exige 2,6 m de folga em torno de casa
+  com interior jogavel (0,9 m para as demais).
+- **casa-tunel baixa demais** (#287): `tunelAltura` fixa de 2,45 m contada de
+  `baseY`, que e o MINIMO do terreno sob toda a planta — sobre a viela sobrava
+  menos de 1,80 m. Agora e medida a partir do piso do beco.
+
+**Resultado: 23/26 -> 6/26 reprovadas.**
+
+### 2. "Subi no telhado e nao desco" — nao se reproduz como armadilha dura
+
+Medido no grafo de superficies do mapa inteiro (raios em cascata de 0,5 em
+0,5 m, ~185 mil nos, arestas de degrau/mantle/queda, Dijkstra minimax ate o
+mundo livre a pe desde a rua): **nenhum telhado do mapa e prisao — nem antes**.
+Entre os telhados comprovadamente alcancaveis, os pontos com descida eram 100%
+antes e depois. O que existia era pior de explicar e facil de sentir: em 207 das
+293 casas a unica saida de algum ponto do telhado era um salto de 2,5 a 5,0 m
+**sem nenhum apoio no meio**, e quem esta em cima nao tem como saber que a queda
+e segura (este jogo nao tem dano de queda). Depois: **129 de 293**.
+
+Duas mudancas, e a primeira e um bug de verdade:
+
+- **`_escadaExterna` tinha colisao de mentira.** A malha visual tinha os degraus
+  de 17,5 cm; a colisao eram DUAS caixas, formando um degrau unico de ~1,4 m —
+  3,5x o `stepHeight` de 0,40 m e acima do mantle de 1,30 m. A escadaria externa
+  da casa, que e a subida e a descida projetadas, nao servia para nenhuma das
+  duas. Agora cada degrau tem a sua caixa. Telhados alcancaveis: 10 -> 14.
+- **`Buildings.degrausDeFuga`** (novo): laje em balanco em zigue-zague na
+  fachada, espacada 2,0 m na vertical, **sempre acima de 1,95 m do chao local**
+  para nao virar obstaculo de cabeca em beco de 1,3 m. 418 degraus em 240 casas.
+  Escada de verdade nao cabe: 1 m de largura num beco de 1,3 m trocaria jogador
+  preso em cima por jogador preso embaixo.
+
+### O que os outros modulos precisam saber
+
+- **`src/world/Portas.js` (novo).** `ctx.world.portas` — folhas que giram no
+  batente. `alvoNaMira(origem, dir, alcance)` devolve a porta MIRADA (travessia
+  de raio contra a folha + checagem de parede no meio), `acionar(porta)` abre ou
+  fecha. So casas com interior jogavel entram (19 portas): em casa macica a
+  porta e cenario, e atras dela ha bloco solido.
+- **`Collision.addObstaculo(obb)` (novo).** Caixa orientada MOVEL, fora do BVH,
+  consultada so pela capsula. O dono escreve `x/y/z/yaw/ativo` e a colisao
+  acompanha no quadro seguinte. **Nao entra em `raycast`** — bala e linha de
+  visada atravessam a folha, para nao mexer no contrato de
+  `faceIndex`/`surface` que FX, AUDIO e a IA consomem. Se alguem precisar de
+  bala parando na porta, fale comigo antes de mexer no raycast.
+- **`Batcher.pushInstance` agora DEVOLVE o indice da instancia.** Para tipo NAO
+  setorizado esse indice sobrevive ao `build()`, e e assim que uma porta unica e
+  animada com `setMatrixAt`. Em tipo setorizado o indice nao vale — nao use.
+- **PLAYER:** `KeyF` (`input.wasPressed('use')`) passou a ser consumido em
+  `Player._atualizarAcao`, chamado depois da camera. Emite **`player:acao`** com
+  `{tecla, texto}` ou `null`, **so quando o alvo MUDA**.
+- **UI/HUD:** consome `player:acao` em `HUD.dicaAcao(p)`; marcacao `.hud-acao`
+  e estilo na secao 2 de `styles.css`. Some junto com a mira quando a luneta
+  esta ativa.
+- **FX/audio:** `AudioEngine.porta(fase, pos)` com `fase` = `'abre'|'fecha'|
+  'bate'`. Prioridade `PRIO.contrato` (retorno direto de acao do jogador) e
+  alcance de 18 m. Trinco + rangido de dobradica (varredura de banda estreita,
+  Q alto) + folha raspando. Nenhum arquivo, como todo o resto.
+- **UI/Menu (pedido, nao editei — o arquivo esta com outro agente):** falta a
+  linha `['Abrir porta', 'F'],` no array `CONTROLES`. Sugestao de posicao: logo
+  depois de `['Recarregar', 'R']`.
+- **navGrid:** o vao da porta agora e liberado no grid (`World._construirNavGrid`,
+  passo 3b). Sem isso o miolo liberado ficava cercado por um anel bloqueado de
+  uma celula e o BFS de conectividade apagava o interior inteiro — a malha
+  discordava da colisao, que passou a ter o vao aberto.
+- **Custo:** colisao 81.640 -> 94.312 triangulos (+15%); visual 2,139 M ->
+  2,213 M (+3,5%); geracao do mundo praticamente igual (2,0 s -> 2,2 s).
+
+### Ferramentas novas (tools/)
+
+`casas.mjs` — **auditoria exaustiva de TODAS as casas** (interior: entra e
+volta? · telhado: todo ponto tem descida?). Grava `tools/casas.<tag>.json`.
+`porta.mjs` — sonda de UM vao, 10 em 10 cm, dizendo em que ponto a capsula e
+barrada e por quem (BVH ou folha), com leque de 8 raios nomeando o obstaculo.
+`portashot.mjs` — capturas (porta fechada com a dica, porta aberta, de dentro
+para a rua, descida de telhado).
+
+**Armadilhas que a medicao pagou, nao repita:**
+1. **Auditoria com a porta FECHADA nao responde nada.** A folha barra de
+   proposito; a pergunta e "existe saida", e a saida passa por abrir. `casas.mjs`
+   mede a acionabilidade dos dois lados com a porta fechada e so entao abre
+   todas para medir a travessia.
+2. **BFS em grade grossa reprova porta boa.** O vao tem 0,92 m e a capsula 0,70:
+   sobram 11 cm de cada lado. Com o no ancorado no CENTRO da celula, passar so
+   dava certo se a grade caisse alinhada — e a grade e do mundo, a porta e da
+   casa, com yaw qualquer. Seis casas foram reprovadas por isso. A celula tem de
+   guardar a posicao REAL devolvida pelo `capsuleSweep`.
+3. **Superficie de 14 cm nao e chao.** O topo da mureta da laje passava em
+   normal e em pe-direito e virava "ponto do telhado sem descida". Exija
+   vizinhos na mesma cota antes de aceitar o no.
+4. **Raio de sonda partindo de cima da casa acha a LAJE, nao o piso.** Vale para
+   o interior e vale em dobro na casa-tunel, cuja altura livre e 2,45 m.
+5. **Comparar antes/depois exige o MESMO instrumento.** O tolerante da grade e o
+   filtro de superficie estreita mudaram os numeros em ~40%; os valores acima
+   sao todos com a versao final da ferramenta, o "antes" medido num export do
+   HEAD (`git archive`) para nao mexer na arvore de trabalho de outro agente.
