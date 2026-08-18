@@ -49,7 +49,7 @@ const ABERTURA = {
 const CONTROLES = [
   ['Movimentar', 'W A S D'], ['Correr', 'Shift'], ['Agachar / Deslizar', 'Ctrl'],
   ['Pular / Escalar', 'Espaço'], ['Atirar', 'Botão esq.'], ['Mirar', 'Botão dir.'],
-  ['Recarregar', 'R'], ['Abrir porta', 'F'],
+  ['Recarregar', 'R'], ['Abrir porta', 'F'], ['Usar item da mochila', 'E'],
   ['Trocar arma', 'Q'], ['Armas 1-3', '1 2 3'],
   ['Modo de tiro', 'B'], ['Corpo a corpo', 'V'], ['Granada', 'G'],
   ['Inspecionar arma', 'H'], ['Pausar', 'Esc'],

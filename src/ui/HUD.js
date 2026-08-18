@@ -155,6 +155,14 @@ export class HUD {
     this.elVidaNum = $('.hud-vida .num');
     this.elVidaBarra = $('.hud-vida .trilho i');
     this.elVidaCaixa = $('.hud-vida');
+    this.elMochila = $('.hud-mochila');
+    this._mochilaEls = {
+      kit: $('.hud-mochila [data-tipo="kit"]'),
+      municao: $('.hud-mochila [data-tipo="municao"]'),
+      suprimento: $('.hud-mochila [data-tipo="suprimento"]'),
+    };
+    this.elMochilaDica = $('.hud-mochila .dica');
+    this._pintarMochila({ municao: 0, kit: 0, suprimento: 0 });
     this._vidaEscrita = -1;
     this.elFps = $('.hud-fps');
     this.elAviso = $('.hud-aviso');
@@ -245,6 +253,15 @@ export class HUD {
       // Leitura numerica de vida no canto inferior esquerdo. O estilo CoD puro
       // usa so a vinheta vermelha, mas sem numero o jogador nao sabe se esta
       // com 90 ou 30 de vida — e nao ha como julgar se vale recuar.
+      // Mochila: itens guardados que ainda nao foram usados. Fica colada na
+      // vida porque as duas respondem a mesma pergunta — "aguento mais?".
+      `<div class="hud-mochila">` +
+      `<div class="item" data-tipo="kit"><i></i><span class="n">0</span></div>` +
+      `<div class="item" data-tipo="municao"><i></i><span class="n">0</span></div>` +
+      `<div class="item" data-tipo="suprimento"><i></i><span class="n">0</span></div>` +
+      `<div class="dica"><b>E</b><span>usar</span></div>` +
+      `</div>` +
+
       `<div class="hud-vida"><span class="rot">VIDA</span>` +
       `<span class="num">100</span>` +
       `<div class="trilho"><i></i></div></div>` +
@@ -369,6 +386,7 @@ export class HUD {
       this.aviso(`qualidade: ${preset?.name ?? '—'}`);
       this._aplicarPreferencias();
     });
+    on('mochila:mudou', (p) => this._pintarMochila(p?.itens));
     on('game:start', () => this.reset());
   }
 
@@ -396,6 +414,31 @@ export class HUD {
     // duas mandando no mesmo valor é receita de piscar.
     if (this.elMira) this.elMira.style.opacity = querLuneta ? '0' : '';
     if (this.elPonto) this.elPonto.style.opacity = querLuneta ? '0' : '';
+  }
+
+  /**
+   * Desenha a mochila. Chamado por evento, nunca por quadro — o conteudo muda
+   * poucas vezes por partida e reescrever DOM a 60 Hz custa layout a toa.
+   *
+   * Slot com zero fica apagado em vez de sumir: posicao fixa deixa o jogador
+   * aprender onde cada item mora, e um bloco que aparece e some obriga a reler
+   * o canto toda vez.
+   */
+  _pintarMochila(itens) {
+    if (!this._mochilaEls || !itens) return;
+    let total = 0;
+    for (const tipo of ['kit', 'municao', 'suprimento']) {
+      const el = this._mochilaEls[tipo];
+      if (!el) continue;
+      const n = itens[tipo] ?? 0;
+      total += n;
+      el.classList.toggle('vazio', n === 0);
+      const num = el.querySelector('.n');
+      if (num) num.textContent = String(n);
+    }
+    // A dica da tecla so aparece quando ha o que usar — poluir a tela com um
+    // atalho inutil e pior do que nao mostrar.
+    this.elMochilaDica?.classList.toggle('some', total === 0);
   }
 
   _onWeaponState(p) {

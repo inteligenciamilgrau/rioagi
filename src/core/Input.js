@@ -20,6 +20,7 @@ const ACTION_KEYS = {
   sprint:   ['ShiftLeft'],
   reload:   ['KeyR'],
   use:      ['KeyF'],
+  usarItem: ['KeyE'],
   melee:    ['KeyV'],
   grenade:  ['KeyG'],
   swap:     ['KeyQ'],

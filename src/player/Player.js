@@ -334,6 +334,10 @@ export class Player {
       if (input.wasPressed('weapon2')) ws.switchTo(1);
       if (input.wasPressed('weapon3')) ws.switchTo(2);
       if (input.wasPressed('swap')) ws.swapPrevious();
+      /* Usar item guardado. Fica junto das outras acoes de uma tecla so, e
+       * nao no WeaponSystem, porque a mochila nao e uma arma — consome kit e
+       * suprimento tambem. Quem decide O QUE gastar e a propria Mochila. */
+      if (input.wasPressed('usarItem')) this.ctx.mochila?.usar?.();
       if (input.wheel) {
         const n = ws.slots.length;
         ws.switchTo(((ws.index + (input.wheel > 0 ? 1 : -1)) % n + n) % n);

@@ -17,6 +17,7 @@ import { World } from './world/World.js';
 import { Player } from './player/Player.js';
 import { AIManager } from './ai/AIManager.js';
 import { Etiquetas } from './ai/Etiquetas.js';
+import { Mochila } from './gameplay/Mochila.js';
 import { Pickups } from './gameplay/Pickups.js';
 import { Progressao } from './gameplay/Progressao.js';
 import { Musica } from './gameplay/Musica.js';
@@ -90,6 +91,8 @@ class Game {
     await ctx.etiquetas.init();
 
     // Itens: drop de inimigo + suprimento dentro das casas.
+    // Antes dos Pickups: eles consultam `ctx.mochila` ao coletar.
+    ctx.mochila = new Mochila(ctx);
     ctx.pickups = new Pickups(ctx);
     await ctx.pickups.init();
 

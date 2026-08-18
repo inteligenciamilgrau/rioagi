@@ -1382,3 +1382,71 @@ input[type='range']::-moz-range-thumb {
 .tela.tem-capa .fundo-morro { opacity: .35; }
 .tela.tem-capa .fundo-morro.longe { opacity: .18; }
 .tela.tem-capa .fundo-fio { opacity: .5; }
+
+/* ==========================================================================
+   MOCHILA — itens guardados, canto inferior esquerdo, acima da vida.
+   Segue as variaveis ja existentes; nenhuma cor nova foi inventada.
+   ========================================================================== */
+.hud-mochila {
+  position: absolute;
+  left: clamp(18px, 3vw, 54px);
+  /* Empilha acima da leitura de vida, com folga para o rotulo dela. */
+  bottom: calc(clamp(18px, 3.4vh, 52px) + clamp(52px, 7.2vh, 96px));
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1.1vw, 14px);
+  font-family: var(--f-cond);
+  text-shadow: var(--sombra-txt);
+  pointer-events: none;
+}
+.hud-mochila .item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  /* Transicao curta so na opacidade: o slot acende ao ganhar item sem
+     empurrar layout (nada de animar largura). */
+  transition: opacity .18s ease-out;
+}
+.hud-mochila .item.vazio { opacity: .28; }
+
+/* Marcador de tipo: forma simples, legivel a 12 px. Cor vem do tipo — as
+   mesmas familias usadas no item 3D, para o jogador ligar chao e HUD. */
+.hud-mochila .item i {
+  width: clamp(9px, 1.15vmin, 13px);
+  height: clamp(9px, 1.15vmin, 13px);
+  border: 1.5px solid currentColor;
+  display: block;
+}
+.hud-mochila .item[data-tipo="kit"] { color: #ff5b52; }
+.hud-mochila .item[data-tipo="kit"] i { border-radius: 2px; }
+.hud-mochila .item[data-tipo="municao"] { color: #c4d17a; }
+.hud-mochila .item[data-tipo="suprimento"] { color: var(--laranja, #e8873c); }
+.hud-mochila .item[data-tipo="suprimento"] i { transform: rotate(45deg); }
+
+.hud-mochila .item .n {
+  font-size: clamp(12px, 1.5vmin, 18px);
+  font-weight: 700;
+  color: var(--osso-1, #e9e5db);
+  min-width: 1ch;
+}
+
+.hud-mochila .dica {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: clamp(2px, .5vw, 8px);
+  font-size: clamp(9px, 1.05vmin, 12px);
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: var(--osso-3);
+  transition: opacity .18s ease-out;
+}
+.hud-mochila .dica.some { opacity: 0; }
+.hud-mochila .dica b {
+  font-weight: 700;
+  color: var(--osso-1, #e9e5db);
+  border: 1px solid rgba(233, 229, 219, .34);
+  border-radius: 2px;
+  padding: 0 4px;
+  letter-spacing: 0;
+}

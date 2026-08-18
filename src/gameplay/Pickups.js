@@ -197,7 +197,7 @@ export class Pickups {
       }
     });
 
-    on('game:start', () => this.reset());
+    on('game:start', () => { this.reset(); this.ctx.mochila?.reset?.(); });
   }
 
   /** Coloca itens fixos dentro das casas que têm interior. */
@@ -299,12 +299,21 @@ export class Pickups {
     }
   }
 
-  /** Só consome o item se ele realmente servir para alguma coisa agora. */
-  _tentarColetar(it) {
-    const d = DEF[it.tipo];
+  /**
+   * Aplica o efeito de um tipo de item no jogador AGORA.
+   *
+   * Vive separado da coleta porque a Mochila tambem precisa dele: guardar um
+   * item e usa-lo depois tem de dar exatamente o mesmo resultado que pisar
+   * nele. Duplicar essa conta em dois lugares e como as duas versoes divergem.
+   *
+   * @returns {{usou: boolean, partes: string[], rotulo: string}}
+   */
+  aplicarEfeito(tipo) {
+    const d = DEF[tipo];
     const jog = this.ctx.player;
-    let usou = false;
     const partes = [];
+    let usou = false;
+    if (!d || !jog) return { usou: false, partes, rotulo: d?.rotulo ?? '' };
 
     if (d.municao > 0) {
       const ganho = this._darMunicao(d.municao);
@@ -318,13 +327,75 @@ export class Pickups {
       this.ctx.bus?.emit('player:health', { health: jog.health, max: jog.maxHealth });
       if (ganho > 0) { usou = true; partes.push(`+${ganho} VIDA`); }
     }
+    return { usou, partes, rotulo: d.rotulo };
+  }
 
-    if (!usou) return;   // nada a ganhar: deixa no chão para depois
+  /**
+   * Este item mudaria alguma coisa agora? Consulta SEM efeito colateral, usada
+   * pela Mochila e pelo HUD para nao gastar item a toa.
+   */
+  serviria(tipo) {
+    const d = DEF[tipo];
+    const jog = this.ctx.player;
+    if (!d || !jog) return false;
+    if (d.vida > 0 && jog.health < jog.maxHealth) return true;
+    if (d.municao > 0 && this._faltaMunicao()) return true;
+    return false;
+  }
 
-    this._recolher(it);
-    this.ctx.hud?.aviso?.(`${d.rotulo}  ${partes.join('  ')}`, 1200);
-    this.ctx.bus?.emit('item:coletado', { tipo: it.tipo, rotulo: d.rotulo });
-    this.ctx.audio?.recarga?.('magin');   // clique mecânico curto já existente
+  /**
+   * Alguma arma esta com a reserva abaixo do maximo?
+   *
+   * O campo e `reserveAmmo` — o mesmo que `_darMunicao` usa. Escrever
+   * `reserveMax` aqui (nome que nao existe) faria esta funcao devolver sempre
+   * false em silencio, e municao na mochila nunca seria considerada util.
+   */
+  _faltaMunicao() {
+    const ws = this.ctx.player?.weapons;
+    for (const s of ws?.slots ?? []) {
+      const max = s.def?.reserveAmmo ?? 0;
+      if (max && s.reserve < max) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Pisou no item: usa na hora se servir, senao GUARDA NA MOCHILA.
+   *
+   * A regra antiga era "nao serve agora, entao ignora e deixa no chao". Isso
+   * lia como coleta quebrada — a pessoa entra numa sala cheia de item, passa
+   * por cima de tudo e nada acontece. O item so continua no chao se a mochila
+   * daquele tipo estiver cheia, e ai a recusa e informada.
+   */
+  _tentarColetar(it) {
+    const d = DEF[it.tipo];
+    const r = this.aplicarEfeito(it.tipo);
+
+    if (r.usou) {
+      this._recolher(it);
+      this.ctx.hud?.aviso?.(`${d.rotulo}  ${r.partes.join('  ')}`, 1200);
+      this.ctx.bus?.emit('item:coletado', { tipo: it.tipo, rotulo: d.rotulo });
+      this.ctx.audio?.recarga?.('magin');   // clique mecânico curto já existente
+      return;
+    }
+
+    const mochila = this.ctx.mochila;
+    if (mochila?.guardar?.(it.tipo)) {
+      this._recolher(it);
+      this.ctx.hud?.aviso?.(`${d.rotulo} NA MOCHILA`, 1100);
+      this.ctx.bus?.emit('item:coletado', { tipo: it.tipo, rotulo: d.rotulo, guardado: true });
+      this.ctx.audio?.recarga?.('magin');
+      return;
+    }
+
+    /* Mochila cheia daquele tipo: o item fica. Avisamos com parcimonia — este
+     * caminho roda a cada quadro enquanto o jogador estiver em cima do item, e
+     * um aviso por quadro entope a tela. */
+    const agora = this._t;
+    if (agora - (this._tCheia ?? -9) > 2.5) {
+      this._tCheia = agora;
+      this.ctx.hud?.aviso?.(`MOCHILA CHEIA — ${d.rotulo}`, 900);
+    }
   }
 
   /**

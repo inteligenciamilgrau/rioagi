@@ -59,6 +59,14 @@ class Etiqueta {
 
 const CHAVE = 'oca:etiquetas';
 
+/* Temporarios do painel de coordenadas. O projeto nao aloca por quadro:
+ * objeto literal criado a 60 Hz vira pressao de GC e engasgo no tiroteio. */
+const _coordOrig = new THREE.Vector3();
+const _coordBaixo = new THREE.Vector3(0, -1, 0);
+/* O painel nao precisa de 60 Hz: reescrever textContent forca layout. 10 Hz
+ * ja e mais rapido do que o olho consegue ler. */
+const PERIODO_COORD = 0.1;
+
 export class Etiquetas {
   static _carregar() {
     try { return localStorage.getItem(CHAVE) === '1'; } catch { return false; }
@@ -81,6 +89,7 @@ export class Etiquetas {
 
   async init() {
     this.ctx.scene.add(this.grupo);
+    this._criarPainel();
     this._onKey = (ev) => {
       if (ev.code === 'F3') {
         this.ativo = !this.ativo;
@@ -243,18 +252,95 @@ export class Etiquetas {
     console.groupEnd();
   }
 
+
+  /* ------------------------------------------------------------------ */
+  /* Painel de coordenadas                                               */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Leitura de posicao do jogador, ligada junto com as etiquetas (F3).
+   *
+   * PORQUE existe: quando alguem relata "fiquei preso" ou "tem um buraco
+   * aqui", a primeira pergunta e ONDE. Sem coordenada na tela a resposta e
+   * "perto de uma casa amarela", que nao reproduz. Com X/Y/Z da para ir direto
+   * ao ponto com `__game.poseAt` ou com as ferramentas de tools/.
+   *
+   * O Y aparece DUAS vezes de proposito: `pos.y` sao os PES (o que importa
+   * para altura de terreno, degrau e queda) e o olho fica 1,68 m acima. Confundir
+   * os dois ja rendeu diagnostico errado aqui.
+   *
+   * E um overlay de DOM, nao um sprite 3D: texto pequeno em sprite fica ilegivel,
+   * e este painel precisa ser copiavel a olho para virar bug report.
+   */
+  _criarPainel() {
+    const host = document.getElementById('ui-root') || document.body;
+    const el = document.createElement('div');
+    el.id = 'debug-coord';
+    el.style.cssText = [
+      'position:fixed', 'top:8px', 'left:50%', 'transform:translateX(-50%)',
+      'z-index:60', 'padding:6px 12px', 'border-radius:5px',
+      'background:rgba(10,11,13,.72)', 'border:1px solid #2a2d33',
+      'color:#e9e5db', 'font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace',
+      'white-space:pre', 'pointer-events:none', 'display:none',
+    ].join(';');
+    host.appendChild(el);
+    this._painelCoord = el;
+  }
+
+  /** Atualiza o painel. Chamado so com as etiquetas ligadas. */
+  _atualizarCoord(dt) {
+    const el = this._painelCoord;
+    if (!el) return;
+    this._tCoord = (this._tCoord ?? 9) + (dt || 0.016);
+    if (this._tCoord < PERIODO_COORD) return;
+    this._tCoord = 0;
+    const jog = this.ctx.player;
+    if (!jog?.position) { el.textContent = 'sem jogador'; return; }
+
+    const p = jog.position;                    // pes
+    const olhoY = jog.eyePosition?.y ?? (p.y + 1.68);
+    const yaw = jog.rig?.yaw ?? 0;
+    // yaw -> graus de bussola. Convencao medida em tools/yaw.mjs:
+    // direcao(yaw) = (-sin, 0, -cos), com 0 = norte (-Z).
+    const grau = ((yaw * 180 / Math.PI) % 360 + 360) % 360;
+
+    // Chao sob os pes: revela buraco de terreno e degrau alto sem sair do lugar.
+    let chao = null, sup = '';
+    const col = this.ctx.world?.collision;
+    if (col?.groundAt) {
+      const y = col.groundAt(p.x, p.z, 200);
+      if (Number.isFinite(y)) chao = y;
+    }
+    if (col?.raycast) {
+      // De 2 m acima dos pes, 6 m para baixo: pega o piso mesmo em laje.
+      _coordOrig.set(p.x, p.y + 2, p.z);
+      const r = col.raycast(_coordOrig, _coordBaixo, 6);
+      if (r?.hit) sup = r.surface ?? '';
+    }
+
+    const f = (v) => (v >= 0 ? ' ' : '') + v.toFixed(2);
+    el.textContent =
+      `X ${f(p.x)}   Y ${f(p.y)}   Z ${f(p.z)}
+` +
+      `olho Y ${f(olhoY)}   rumo ${grau.toFixed(0).padStart(3, '0')}°` +
+      (chao === null ? '' : `   chão ${f(chao)}${sup ? ' · ' + sup : ''}`);
+  }
+
   _pegar(i) {
     let e = this.pool[i];
     if (!e) { e = new Etiqueta(); this.pool[i] = e; this.grupo.add(e.sprite); }
     return e;
   }
 
-  update() {
+  update(dt) {
     if (!this.ativo) {
       if (this.grupo.visible) this.grupo.visible = false;
+      if (this._painelCoord) this._painelCoord.style.display = 'none';
       return;
     }
     this.grupo.visible = true;
+    if (this._painelCoord) this._painelCoord.style.display = 'block';
+    this._atualizarCoord(dt);
 
     const ai = this.ctx.ai;
     let n = 0;
