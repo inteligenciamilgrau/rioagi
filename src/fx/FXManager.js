@@ -251,7 +251,18 @@ export class FXManager {
       this._acenderLuz(_v1, rec.flash.cor, rec.flash.intensidade, rec.flash.distancia, rec.flash.ms);
     }
 
-    this.ctx.audio?.impacto?.(surface ?? 'concreto', _v1);
+    /* O SOM do impacto NAO sai daqui.
+     *
+     * `AudioEngine._assina` ja tem `bus.on('weapon:hit', ...)` desde sempre, e
+     * esta linha chamava `impacto()` de novo para o MESMO evento: medido em
+     * 197 eventos -> 394 chamadas, a maior categoria de voz do jogo (prio 56)
+     * dobrada em TODO tiro do jogo. Nao era so custo — era o impacto tocando
+     * duas vezes o tempo inteiro.
+     *
+     * O dono e o AUDIO, e nao o FX, por dois motivos: ele ja assina o evento
+     * direto do barramento (nao depende de o FX estar vivo nem de a qualidade
+     * ter cortado particula), e som e o modulo dele. O FX aqui cuida do que e
+     * visivel: particula, decal e o clarao do impacto. */
   }
 
   _aoEjetar({ position, direction, speed }) {

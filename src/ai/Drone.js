@@ -86,6 +86,38 @@ const _baixo = new THREE.Vector3(0, -1, 0);
 const _cima = new THREE.Vector3(0, 1, 0);
 const _e = new THREE.Euler();
 
+/**
+ * Meia-volta entre o `yaw` LOGICO da IA e a orientacao da MALHA.
+ *
+ * As duas convencoes do projeto nao batem, e isto reconcilia as duas no unico
+ * lugar onde a malha e girada:
+ *
+ *   - LOGICA: `Perception` recebe `_frente = (sin(yaw), 0, cos(yaw))`, que e o
+ *     +Z local. `Enemy._apontar` e `Drone._apontar` escrevem
+ *     `yawAlvo = atan2(alvo.x - pos.x, alvo.z - pos.z)`, e `spawnPerto` usa a
+ *     mesma conta com o comentario "vira de frente para o jogador". Ou seja: no
+ *     codigo, FRENTE = +Z local.
+ *   - MALHA: o corpo e autorado com a cara em -Z (padrao Object3D) — no drone a
+ *     fenda optica fica em z = -0,322 e o casulo do sensor em z = -0,248; no
+ *     `Soldier` o nucleo aceso do peito esta em z = -0,150 e a barra de sinal
+ *     das costas em z = +0,186.
+ *
+ * Sem o offset, o inimigo vira as COSTAS para quem ele esta olhando. Medido em
+ * `tools/frente.mjs`: com o yaw de "virar de frente", o +Z local aponta para a
+ * camera (0,25 / -0,97 contra um rumo de 1,3 / -5,0) e a foto mostra a traseira.
+ *
+ * Somar PI aqui — e nao mexer em `_frente` — e o caminho certo: a percepcao, a
+ * mira, o giro do corpo e a varredura de vigia continuam com exatamente o
+ * comportamento que ja foi medido, e so o desenho e reconciliado. Como
+ * `posOlho()` e a boca do cano tambem derivam de `corpo.quaternion`, os dois
+ * passam a sair do lado certo de graca.
+ *
+ * ATENCAO: o `Soldier` tem o MESMO desencontro e continua sem correcao — ver o
+ * bloco [AI] no NOTES.md. Corrigi-lo exige revalidar o ciclo de caminhada e a
+ * IK de mira, que nao cabia nesta tarefa.
+ */
+const OFFSET_MALHA = Math.PI;
+
 /** Estados exclusivos do drone. Os demais vem de `ESTADO` (Enemy.js). */
 export const ESTADO_DRONE = {
   PAIRAR: 'pairar',              // travado no ar, mirando — a JANELA DE TIRO
@@ -280,7 +312,7 @@ export class Drone {
     this.percepcao.reset();
     this.corpo.visible = true;
     this.corpo.position.copy(this.pos);
-    this.corpo.rotation.set(0, yaw, 0);
+    this.corpo.rotation.set(0, yaw + OFFSET_MALHA, 0);
     this.corpo.quaternion.setFromEuler(this.corpo.rotation);
 
     this.patrulha = (patrulha && patrulha.length) ? patrulha : this._rotaLocal(this.pos);
@@ -306,6 +338,10 @@ export class Drone {
     this.ctx.bus?.emit('enemy:damaged', {
       enemyId: this.id, damage: total, point: ponto,
       headshot: parte === 'nucleo',
+      /* Marca de MAQUINA QUE VOA: o AudioEngine usa para nao soltar grito
+       * humano em cima do drone (ficcao) e para nao sintetizar ~12 nos ao vivo
+       * a cada acerto num enxame (custo). */
+      eDrone: true,
     });
 
     if (this.vida <= 0) { this._morrer(ponto, dirTiro); return true; }
@@ -354,6 +390,7 @@ export class Drone {
       enemyId: this.id, headshot: false,
       weapon: this.ctx.player?.weaponSystem?.current?.id ?? null,
       point: _v.clone(),
+      eDrone: true,
     });
     this.ctx.audio?.droneQueda?.(this.pos);
     void ponto;
@@ -613,8 +650,25 @@ export class Drone {
     _dir.z += (Math.random() * 2 - 1) * e;
     _dir.normalize();
 
-    this.ctx.bus?.emit('enemy:fire', { enemyId: this.id, origin: _v.clone(), dir: _dir.clone() });
-    this.ctx.audio?.tiro?.('smg', _v, false);
+    /* SÓ o evento. NÃO chamar `audio.tiro` aqui.
+     *
+     * `AudioEngine._assina` ja tem `bus.on('enemy:fire', p => this.tiro(...))`
+     * desde sempre — e o hostil de chao, por isso, so emite o evento. Chamar o
+     * audio TAMBEM produzia DOIS sons por disparo de drone, e som duplicado nao
+     * aparece como "descarte alto": aparece como o dobro do custo de sintese
+     * pelo mesmo evento, que e exatamente o que o cabecalho do AudioEngine
+     * identifica como a causa do estalo.
+     *
+     * MEDIDO em `tools/audioenxame.mjs` com o enxame em campo e o jogador
+     * atirando: 34 `enemy:fire` produziram 210 chamadas de `tiro()` quando o
+     * esperado eram 176 — 34 a mais, uma por disparo de drone, exatas.
+     *
+     * `weapon` no payload existe para o timbre sair de SMG (banda mais alta,
+     * cauda curta) e nao de fuzil: `familia()` mapeia 'smt40' -> 'smg'. Um
+     * enxame com o mesmo estampido do fuzil do jogador vira lama na mixagem. */
+    this.ctx.bus?.emit('enemy:fire', {
+      enemyId: this.id, origin: _v.clone(), dir: _dir.clone(), weapon: 'smt40',
+    });
     // coice: o corpo recua um tico a cada tiro (massa pequena, arma no nariz)
     this.vel.addScaledVector(_dir, -0.55);
 
@@ -889,7 +943,7 @@ export class Drone {
     this._bob += dt * 8.6;
     const bob = Math.sin(this._bob) * 0.03 + Math.sin(this._bob * 0.43) * 0.02;
     this.corpo.position.set(this.pos.x, this.pos.y + bob, this.pos.z);
-    _e.set(this.arfagem * 0.55, this.yaw, this.rolagem, 'YXZ');
+    _e.set(this.arfagem * 0.55, this.yaw + OFFSET_MALHA, this.rolagem, 'YXZ');
     this.corpo.quaternion.setFromEuler(_e);
     this.corpo.updateMatrixWorld(true);
 
@@ -925,7 +979,9 @@ export class Drone {
       this.rolagem = (Math.random() < 0.5 ? 1 : -1) * (0.6 + Math.random() * 1.9);
       this.arfagem = (Math.random() - 0.5) * 0.5;
       this._trocar(ESTADO.MORTO);
-      this.ctx.audio?.impacto?.('metal', this.pos);
+      /* Só o evento, de novo. `AudioEngine` assina `weapon:hit` e toca o
+       * impacto; o `FXManager` assina o mesmo evento e faz as faíscas. Chamar
+       * `audio.impacto` aqui além de emitir era a mesma duplicação do tiro. */
       this.ctx.bus?.emit('weapon:hit', {
         point: this.pos.clone(), normal: _cima.clone(),
         surface: 'metal', target: 'world', enemyId: null,
@@ -933,7 +989,7 @@ export class Drone {
     }
 
     this.corpo.position.copy(this.pos);
-    _e.set(this.arfagem, this.yaw, this.rolagem, 'YXZ');
+    _e.set(this.arfagem, this.yaw + OFFSET_MALHA, this.rolagem, 'YXZ');
     this.corpo.quaternion.setFromEuler(_e);
     this.corpo.updateMatrixWorld(true);
   }

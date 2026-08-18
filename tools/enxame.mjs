@@ -222,11 +222,40 @@ const enxameInfo = await page.evaluate(() => {
   const ctx = window.__game.ctx;
   const drones = ctx.ai.getEnemies().filter((e) => e.eDrone);
   if (!drones.length) return { n: 0 };
-  // centroide do enxame, e uma câmera olhando para ele de baixo, na rua
-  const c = drones.reduce((a, d) => { a.x += d.pos.x; a.y += d.pos.y; a.z += d.pos.z; return a; },
-    { x: 0, y: 0, z: 0 });
-  c.x /= drones.length; c.y /= drones.length; c.z /= drones.length;
+
+  /* Enquadra pelos drones QUE SE VEEM, não pelo centroide de todos.
+   *
+   * O centroide de um enxame espalhado pelo morro cai, com frequência, dentro
+   * de uma casa — e a foto "do enxame" saiu sendo a foto de uma parede de
+   * tijolo com um drone do tamanho de um mosquito no canto. Filtrando por linha
+   * de visada primeiro, a câmera aponta para onde o combate de fato está. */
   const jog = ctx.player.position;
+  const olho = ctx.player.eyePosition;
+  const col = ctx.world.collision;
+  const V = ctx.camera.position.constructor;
+  const visiveis = drones.filter((d) => {
+    const dir = new V().subVectors(d.pos, olho);
+    const dist = dir.length();
+    if (dist < 1 || dist > 45) return false;
+    dir.divideScalar(dist);
+    const r = col.raycast(olho, dir, dist - 0.6);
+    return !(r && r.hit);
+  });
+  const usar = visiveis.length >= 2 ? visiveis : drones;
+  const c = usar.reduce((a, d) => { a.x += d.pos.x; a.y += d.pos.y; a.z += d.pos.z; return a; },
+    { x: 0, y: 0, z: 0 });
+  c.x /= usar.length; c.y /= usar.length; c.z /= usar.length;
+
+  /* As hélices são desenhadas por um `InstancedMesh` alimentado dentro de
+   * `AIManager.update`. Numa captura com o jogo pausado esse update não roda, e
+   * a primeira leva de fotos saiu com os drones SEM pá nenhuma. Aqui o lote é
+   * preenchido à mão, com a mesma chamada que o manager faz. */
+  const rot = ctx.ai.rotores;
+  if (rot) {
+    rot.comecar();
+    for (const d of drones) if (d.corpo.visible) rot.adicionar(d.corpo, d.giroHelice);
+    rot.terminar();
+  }
   /* PAUSA antes de compor a foto. `window.__game.settle()` renderiza N quadros
    * de forma síncrona, mas o laço de rAF continua rodando entre o fim deste
    * `evaluate` e o `page.screenshot()` — e com o jogo em 'jogando' ele atualiza
@@ -236,11 +265,12 @@ const enxameInfo = await page.evaluate(() => {
   ctx.camera.up.set(0, 1, 0);
   ctx.camera.position.set(jog.x, jog.y + 1.68, jog.z);
   ctx.camera.lookAt(c.x, c.y, c.z);
+  ctx.camera.fov = 75; ctx.camera.updateProjectionMatrix();
   ctx.camera.updateMatrixWorld(true);
   ctx.lighting?.update?.(0, ctx.time.elapsed);
   window.__game.settle(20);
   return {
-    n: drones.length,
+    n: drones.length, visiveis: visiveis.length,
     dists: drones.map((d) => +d.pos.distanceTo(jog).toFixed(1)).sort((a, b) => a - b),
     alts: drones.map((d) => +(d.pos.y - d._chaoY).toFixed(1)),
     estados: drones.map((d) => d.estado),
@@ -281,6 +311,9 @@ const perto = await page.evaluate(() => {
   d.yaw = Math.atan2(jog.x - d.pos.x, jog.z - d.pos.z);
   d.arfagem = -0.14; d.rolagem = 0.10;
   d._pose(0);
+  // mesma alimentacao manual do lote de helices (ver a captura do enxame)
+  const rot2 = ai.rotores;
+  if (rot2) { rot2.comecar(); rot2.adicionar(d.corpo, d.giroHelice); rot2.terminar(); }
 
   ctx.camera.up.set(0, 1, 0);
   ctx.camera.position.set(jog.x, jog.y + 1.72, jog.z);
@@ -394,7 +427,15 @@ const tab = await page.evaluate(() => {
   /* Pausa e abre o TAB. Com o jogo pausado o laço principal ainda chama
    * `hud.update` (ver `main.frame`), então o mapa continua vivo enquanto os
    * drones ficam parados onde foram postos — que é o que a foto precisa. */
-  ctx.state = 'pausado';
+  /* CONTINUA EM 'jogando'. Duas tentativas anteriores saíram com o HUD normal
+   * em vez do mapão, por dois motivos somados:
+   *   1. pausar fecha o mapa (o HUD só o abre em partida — é o que o
+   *      `tools/tabmapa.mjs`, que funciona, faz: state 'jogando' o tempo todo);
+   *   2. `Input.endFrame()` limpa as teclas a cada quadro, e o laço de rAF roda
+   *      entre este `evaluate` e o `page.screenshot()` — adicionar 'Tab' uma
+   *      vez abre o mapa e o quadro seguinte o fecha.
+   * Neutralizar `endFrame` é o equivalente a manter o dedo na tecla. */
+  ctx.input.endFrame = () => {};
   ctx.input.keys.add('Tab');
   for (let i = 0; i < 24; i++) ctx.hud.update(1 / 60);
   return {
@@ -450,7 +491,7 @@ for (const k of Object.keys(audio.porTipo).sort()) {
 
 l('');
 l('3) CAPTURAS  -> shots/drone/');
-l('  01-enxame-morro.png   ' + enxameInfo.n + ' drones  dist=[' + (enxameInfo.dists || []).join(',')
+l('  01-enxame-morro.png   ' + enxameInfo.n + ' drones (' + enxameInfo.visiveis + ' com visada)  dist=[' + (enxameInfo.dists || []).join(',')
   + ']  alt=[' + (enxameInfo.alts || []).join(',') + ']');
 l('     estados: ' + JSON.stringify(enxameInfo.estados));
 l('  02-drone-perto.png    dist ' + perto.dist + ' m  ·  estado ' + perto.estado + '  ·  pulso ' + perto.pulso);

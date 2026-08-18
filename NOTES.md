@@ -723,3 +723,297 @@ minuto — a reciclagem sozinha vale quase o dobro de pressao nas ondas altas.
 - **O jogador sintetico do `pressao.mjs` nao anda nem se abriga.** Os numeros
   dele sao regua comparativa, nao previsao do que um humano sente. Uma versao
   com esquiva e cobertura daria um numero mais parecido com a experiencia real.
+
+---
+
+## [AI] Drone: inimigo que voa, onda tematica de enxame, e a curva de ondas refeita
+
+Tres entregas numa so passada: o DRONE como tipo de inimigo, a ONDA TEMATICA de
+enxame (a 3), e a CURVA DE ONDAS reequilibrada — a onda 1 estava cheia demais
+para servir de entrada agora que a IA enxerga, ouve e converge.
+
+### 1. O drone — arquivos novos e por que ele e assim
+
+- `src/ai/DroneMalha.js` — malha procedural (2 654 tris) + material proprio.
+- `src/ai/Drone.js` — o agente. Contrato compativel com `Enemy`.
+
+**Parentesco visual.** Usa literalmente o mesmo `Construtor` do `Soldier` (agora
+exportado), os MESMOS acabamentos numericos (chapa 0.80/0.32, placa 0.60/0.58,
+junta 0.42/1.00) e o MESMO ciano `0x1fcdff` com emissivo 3.0. A fenda optica
+atravessa o nariz inteiro, com as pontas dobrando para as laterais e uma banda
+quase preta em volta — as duas medidas que fizeram a fenda do soldado ler em
+pleno sol valem aqui igual.
+
+**Material PROPRIO, nao o `materialSoldado()`.** O telegrafo da investida e a
+fenda PULSANDO, e pulso e valor por drone; o unico jeito barato de variar por
+objeto e um uniform escrito em `onBeforeRender`. Se esse uniform morasse no
+material do soldado, o ultimo drone desenhado deixaria o pulso dele valendo para
+todo soldado desenhado depois. O ganho entra no VERTICE
+(`vEmi = emiAttr * uEmiGanho`), nao no fragmento — a medicao do `roboCor` que
+proibiu instrucao nova no fragmento continua respeitada.
+
+**`ENV_ROBO` do drone e 0,55, contra 0,30 do soldado.** Nao e gosto: um bicho de
+70 cm visto contra o ceu do entardecer fica quase sempre em contraluz, e com
+0,30 a captura de perto saiu com o corpo em preto chapado — nenhuma placa,
+nenhuma junta legivel a 3 m, so a fenda boiando. O soldado nao pode usar 0,55
+porque com ganho alto ele vira espelho de ceu (foi o que a calibragem do
+`roboCor.mjs` corrigiu). Materiais separados existem para cada um ter a sua dose.
+
+**Helices num unico `InstancedMesh`** (`RotoresEnxame`): 4 rotores x 14 drones em
+1 draw call. Uma `Mesh` por rotor custaria 4 draw calls por drone.
+
+### 2. JUSTICA — o que existe so para o drone nao ser injusto
+
+Alvo pequeno, rapido e no ar e a receita mais curta para frustracao. Quatro
+decisoes, nenhuma delas "baixar o dano":
+
+1. **`PAIRAR` e um estado de verdade.** ~1,0 s travado no ar a 10-16 m antes de
+   cada rajada, e NAO ha caminho para `ATIRAR` que nao passe por ele. Medido:
+   106 janelas em 90 s de enxame, duracao 0,87 / 1,02 / 1,15 s (min/mediana/max).
+2. **Telegrafo nos dois sentidos**: chiado ascendente (`audio.droneInvestida`) e
+   a fenda pulsando de 4 Hz a 11 Hz ate o tiro.
+3. **Hitbox generosa no ENVELOPE, precisa no NUCLEO**: esfera de 42 cm cobre o
+   corpo inteiro (o chassi real tem 13 cm de altura); o nucleo de 13,5 cm vale
+   2,0x. 70 hp = 3 tiros de fuzil no casco, 2 no nucleo.
+4. **Velocidade que cabe na mira**: cruzeiro 6,5 m/s, reposicionamento 7,8 m/s.
+
+E ele NAO escapa do teto de atiradores: `PAIRAR` e `ATIRAR` ocupam vaga de fogo.
+`AIManager.vagaDeFogo` passou a consultar `o.ocupaVagaDeFogo` (getter do
+contrato) em vez de `o.estado === 'atirar'` — senao dez drones poderiam pairar
+juntos e as rajadas cairiam na mesma janela, que e a parede de dano com um
+segundo de atraso. Medido: **0 quadros acima do teto em 5 400**.
+
+**TTK (`tools/drone.mjs`, 12 tentativas):** mediana **1,15 s**, **8 tiros
+disparados**, **3 acertos**, **27-31% de acerto**, a **12-16 m**. O jogador
+sintetico tem tempo de reacao 0,35 s, teto de giro de mira 3,6 rad/s e erro que
+converge — nao e um robo perfeito.
+
+### 3. VOO — nao usa navGrid, e a fiacao nao esta na colisao
+
+`world.navGrid` e 2D. O drone tem direcao propria em 3D com desvio por raycast.
+
+**O gato de fiacao NAO ESTA na malha de colisao** — `Props.postesEFios` registra
+o poste (uma caixa de 0,28 m) e nunca o fio. Nenhum raycast vai avisar o drone
+de que ha fio na frente. A unica defesa e nao subir ate la: os fios vivem entre
+~4,5 e ~8,5 m do chao, entao a faixa de cruzeiro e **2,4-4,2 m sobre o chao
+local, teto duro em 5,4 m**. Isso tambem e a escolha certa de jogo — drone a
+20 m nao ve beco nenhum e vira um ponto no ceu que ninguem acerta.
+
+Tres defesas somadas, e as tres foram necessarias (medido em `tools/drone.mjs`,
+900 amostras, folga ate a geometria mais proxima):
+
+| | raspando (menor que 0,42 m) | penetrando (menor que 0,16 m) |
+|---|---|---|
+| so repulsao por sonda | 55 | 20 |
+| + varredura do passo | 44 | 15 |
+| + **depenetracao** (`sphereCast` maxDist 0) | **2-4** | **1-2** |
+
+A depenetracao foi o que resolveu, e o caso que faltava era o drone QUASE PARADO
+encostado num muro: parado a varredura nao tem passo para testar, e a repulsao
+da sonda DECAI enquanto o muro continua ali.
+
+**Altitude: navegacao e altitude sao eixos SEPARADOS.** O rumo para o destino e
+horizontal; quem manda em Y e so o controle de faixa. Com o Y vindo tambem do
+rumo, o destino carregava a altura do chao de ONDE O DRONE ESTAVA (a sonda e
+local) — num morro com 36 m de desnivel isso empurrava o drone para dentro da
+encosta o caminho inteiro. Percentil 5 da altura subiu de 1,71 m para 2,7-2,9 m.
+
+**Nao usar `collision.groundAt` para altura de drone**: o raio de y=200 acerta o
+TELHADO quando ele esta sob um beiral, e a conta da altura sai NEGATIVA. A
+primeira versao da propria ferramenta caiu nessa e reportou "altura minima
+-5,98 m". A sonda certa sai de pouco acima do drone e desce.
+
+### 4. Tres defeitos de maquina de estados que so aparecem em medicao longa
+
+1. **`dif` sem padrao.** `Drone` nascia com `dif = null` (o `Enemy` sempre teve
+   padrao). `_atirar` saia no primeiro `if`, `_naRajada` nunca subia, e o drone
+   ficava preso em ATIRAR **para sempre**, segurando uma das tres vagas de fogo.
+   Censo: `atirar: 3` estavel por 90 s e ZERO tiros — o bug se disfarcava de
+   "teto de atiradores funcionando". Agora ha padrao E prazo de validade no
+   estado (1,4 s).
+2. **SUSPEITO nao largava a rota de ronda.** Entrava carregando o destino
+   anterior e so trocava depois de `chegou`; com ponto de ronda a 40 m e teto de
+   20 s, desistia antes de comecar a andar na direcao certa. Medido: 10 de 10
+   drones terminaram 90 s em `patrulha`, zero janelas, zero tiros.
+3. **PERSEGUIR desistia no primeiro quadro.** O relogio era `P.tempoSemVer`, que
+   nasce em 999 e so zera ao AVISTAR. Alertado por SOM (o caso normal —
+   `weapon:fire` chega a 70 m), o drone entrava em PERSEGUIR ja satisfazendo a
+   condicao de desistencia, caia em SUSPEITO, voltava para ALERTA e repetia.
+   Censo: `alerta: 9` estavel por 90 s. Agora o relogio e `tEstado`.
+
+**`_espiar`**: perdendo a visada, o drone SOBE (ate +2,0 m, ainda sob o teto da
+fiacao) e FECHA a distancia (ate 6,5 m). Antes ele parava na faixa de 13 m e
+esperava ver; com casa no meio, nunca via — 4 de 12 tentativas de TTK terminavam
+com `consciencia=0, NUNCA visto`. E a propria razao de o bicho existir: a malha
+nunca mapeou o morro porque tem parede onde a planta diz rua.
+
+### 5. AUDIO — o picote relatado em jogo, medido e corrigido
+
+O zumbido do enxame e **UMA voz permanente para N drones**
+(`AudioEngine.zumbidoEnxame`), fora do pool, no centroide, modulada por
+contagem/distancia/tensao. Um loop por drone seriam ate 10 vozes ocupadas PARA
+SEMPRE: som em loop nunca chega ao fim, nunca devolve a cadeia e nunca cede a
+vez para tiro nem impacto. Custo fixo: 6 nos, independente do tamanho do enxame.
+
+**O picote NAO vinha do zumbido. Vinha de som DUPLICADO.** Medido com
+`tools/audioenxame.mjs` (enxame em campo + jogador atirando a 700 rpm):
+
+- `enemy:fire` disparou 34 vezes e `A.tiro()` foi chamado **210** vezes quando o
+  esperado eram 176 — **34 a mais, uma por disparo de drone, exatas**. Causa:
+  `Drone._atirar` chamava `ctx.audio.tiro()` ALEM de emitir o evento, e
+  `AudioEngine._assina` ja tem `bus.on('enemy:fire', ...)` desde sempre. O hostil
+  de chao so emite o evento; o drone fazia as duas coisas.
+- Mesma duplicacao em `weapon:hit` na queda da carcaca.
+- **`enemy:damaged`/`enemy:killed` disparavam GRITO HUMANO em cima do drone** —
+  55% dos acertos. `grito` NAO passa pelo cache de forma de onda: cada um monta
+  ~12 nos ao vivo. Num enxame o jogador acerta drone varias vezes por segundo.
+
+Corrigido: o drone so emite eventos; `droneInvestida` e `droneQueda` passaram a
+usar `_tocaCache` (1 no em vez de ~12); e os payloads do drone levam
+`eDrone: true`, que o `AudioEngine` usa para nao soltar grito humano em maquina.
+
+**Depois, com a onda 3 dirigida pela propria `Progressao`, 16 s:**
+`enemy:fire -> tiro` **1:1**; `enemy:damaged` 28 e `enemy:killed` 9 -> **grito 0**;
+793 pedidos de voz (50/s), **descarte 0%**; **deriva do relogio de audio -9 ms em
+16 s (-0,05%)**. Referencia do `audiodiag` com 12 hostis de chao: 48% de descarte
+e 1 668 ms de deriva.
+
+**Armadilha de medicao que custou duas rodadas:** a primeira versao do
+`tools/enxame.mjs` deu "0% de descarte, cabe folgado" — e o jogador relatou
+picote na MESMA versao. O boneco ficava parado, em silencio e **morto**
+(`Player._die()` poe `ctx.state = 'morto'`), e com o alvo morto TODO drone cai em
+PATRULHA no primeiro quadro. Media silencio e chamava de folga. Se for medir
+audio de combate: mantenha o jogador VIVO, ATIRANDO e ACERTANDO.
+
+### 6. Composicao de onda e a curva refeita
+
+`Progressao` ganhou a tabela `COMPOSICAO` (declarativa, uma linha por onda) com
+`drones`, `rotulo`, e sobrescrita de `meta`/`simultaneos`/`atiradores`/`intervalo`.
+Alem da tabela, `composicaoPadrao(n)` repete o enxame a cada 5 ondas.
+
+Onda 3 = **ENXAME** (so drone, 8 em campo, meta 10, teto de 3 atiradores). Onda 2
+apresenta UM drone. A onda tematica pede a propria contagem porque drone e mais
+facil de acertar e mais fragil: com a meta da curva de chao (6) a onda tematica
+seria mais curta que a onda 2.
+
+**Curva ANTES x DEPOIS** (a antiga foi calibrada quando a IA era passiva):
+
+```
+       |        meta      |    simultaneos   |   atiradores  |  reforco (s)  | drones |
+ onda  |  antes    depois |  antes    depois | antes  depois | antes  depois |  novo  | rotulo
+    1  |      5         3 |      6         3 |     3       2 |   7.9     6.7 |      0 | PATRULHA
+    2  |      7         5 |      7         4 |     3       2 |   7.3     6.2 |      1 | BATEDOR
+    3  |      8        10 |      8         8 |     3       3 |   6.7     3.2 |      8 | ENXAME
+    4  |     10         8 |      9         6 |     3       3 |   6.1     5.1 |      1 |
+    5  |     12         9 |      9         7 |     4       3 |   5.5     4.6 |      2 | CERCO
+    6  |     13        11 |     10         8 |     4       3 |   4.9     4.1 |      2 |
+    7  |     15        12 |     11         9 |     4       4 |   4.3     3.6 |      3 |
+    8  |     16        16 |     12        11 |     4       4 |   3.7     2.8 |     11 | ENXAME CERRADO
+    9  |     18        15 |     12        11 |     4       4 |   3.1     3.0 |      2 |
+   10  |     20        17 |     12        12 |     4       4 |   3.0     3.0 |      2 |
+```
+
+Onda 1 saiu de 6 vivos / 3 atirando para **3 vivos / 2 atirando**, e o teto de 12
+simultaneos que chegava na onda 8 agora chega na 10. O intervalo de reforco
+encurtou NO COMECO de proposito (com o campo mais magro, esperar 8 s por dois
+hostis e tempo morto) e as ondas altas ficaram onde estavam. O perfil de IA
+esticou: ondas 1-5 vao de facil a normal (era 1-4), 6-13 de normal a dificil.
+
+### 7. DEFEITO PRE-EXISTENTE ACHADO — o hostil de chao renderiza DE COSTAS
+
+Nao corrigido, e e o item mais importante para a proxima passada de AI.
+
+As duas convencoes do projeto nao batem:
+- **Logica**: `Perception` recebe `_frente = (sin(yaw), 0, cos(yaw))` = **+Z
+  local**. `_apontar` e `spawnPerto` escrevem `yaw = atan2(alvo.x - pos.x,
+  alvo.z - pos.z)` — o comentario do `spawnPerto` diz "vira de frente para o
+  jogador".
+- **Malha**: o `Soldier` e autorado com a cara em **-Z** — nucleo aceso do peito
+  em `z = -0,150`, barra de sinal das COSTAS em `z = +0,186`.
+
+Resultado: quando a IA vira para olhar alguem, ela mostra as costas.
+
+Provado em `tools/frente.mjs`, por marco anatomico (nao por eixo): com o yaw de
+"virar de frente", a fenda optica fica a **5,95 m** da camera e a barra dorsal a
+**5,69 m** — as costas estao mais perto. Com `yaw + PI`, inverte (5,00 x 5,31).
+A foto `shots/drone/frente-soldado-x-drone.png` mostra os dois lado a lado.
+
+**O drone ja sai certo** (`OFFSET_MALHA = Math.PI` em `Drone.js`). O soldado NAO
+foi corrigido de proposito: somar PI onde `soldado.grupo.rotation.y` e escrito
+inverte tambem o sentido do ciclo de caminhada e a IK de mira, e isso precisa de
+revalidacao propria — nao cabia nesta tarefa. **Corrija com foto, nao so com
+numero.**
+
+### 8. Outro defeito pre-existente medido, e um corrigido
+
+- **`weapon:hit` toca impacto DUAS vezes.** `AudioEngine._assina` tem
+  `bus.on('weapon:hit', ...)` e `FXManager._aoAcertar` (assinante do MESMO
+  evento) chama `ctx.audio.impacto()` de novo. Medido: 197 eventos -> **394**
+  chamadas. E a maior categoria de voz do jogo (prio 56), dobrada, em TODO tiro —
+  nao so em drone. Fica para o dono do FX decidir de que lado remover.
+- **`AIManager.damageEnemy` nao entendia a chamada do PLAYER.**
+  `WeaponSystem._damageEnemy` sempre chamou `ai.damageEnemy(id, dmg, payload)` e
+  este metodo so entendia a forma posicional. Consequencias: `parte` chegava
+  `undefined`, entao `MULT_PARTE` valia **1 sempre** (a hitbox de cabeca de 2,5x
+  nunca foi aplicada por esse caminho, e o `headMult` da arma tambem nao, porque
+  do lado do PLAYER `headshot` e `part === 'head'` e a IA devolve `'cabeca'`); e
+  `ponto` chegava o OBJETO de payload, e `subVectors(payload, camera)` produz
+  **NaN**, que ia para `soldado.flinch` e `Ragdoll.impulso`. **CORRIGIDO** — o
+  metodo aceita as duas formas. Efeito colateral assumido: tiro na cabeca em
+  hostil de chao passou a valer 2,5x de verdade (4 tiros -> 2 com o fuzil). Se
+  isso desequilibrar, o lugar de ajustar e `MULT_PARTE`, nao o parser.
+
+### 9. O que os outros modulos precisam saber
+
+- **`ai.pool` continua sendo a lista UNIFICADA** (chao + drones), de proposito:
+  `Progressao` escreve o perfil de dificuldade iterando ela e nao precisa saber
+  que ha dois tipos. Quem precisa separar usa `ai.poolSolo` / `ai.poolDrone`.
+- **Contrato novo comum aos dois tipos**: `objeto3d`, `posOlho(out)`,
+  `ocupaVagaDeFogo`, `vidaDoCorpo`, `eDrone`. `Enemy.alive` continua igual.
+- **`ai.spawn` e `ai.spawnOnda` ganharam um argumento `tipo`** (`'solo'` |
+  `'drone'`), opcional; chamadas antigas seguem validas. **`ai.maxDrones`** e
+  publico e a `Progressao` escreve nele por onda. **`ai.contarDrones()`** e novo.
+- **Carcaca de drone some em 14 s** (contra 26 s do corpo de chao).
+- **`enemy:damaged` / `enemy:killed` de drone levam `eDrone: true`.** Quem tratar
+  esses eventos e quiser distinguir maquina que voa de hostil a pe, use isso.
+- **`enemy:killed` de drone traz `point` NO CHAO**, nao onde a bala pegou:
+  `Pickups._assentarNoChao` desce o item por so 4 m, e um drone abatido a 4,5 m
+  deixaria a municao boiando no ar.
+- **UI**: o mapa do TAB **enxerga drone** — o cone dele e horizontal, sem limite
+  vertical, e o raio para `p.y + 1.1` nao atrapalha (medido livre nos tres casos
+  com visada). Confirmado em foto: `shots/drone/03-drone-tab.png`.
+
+### 10. Ferramentas novas
+
+- `tools/drone.mjs` — sanidade de voo (altitude, folga, travamento), TTK com
+  jogador sintetico de mira humana, e ciclo/teto de fogo com enxame.
+- `tools/enxame.mjs` — FPS com o laco de rAF de verdade, descarte de voz, e as
+  tres capturas (`shots/drone/`).
+- `tools/audioenxame.mjs` — audio de combate DENTRO do jogo, com enxame e jogador
+  atirando e acertando. Conta CHAMADAS POR EVENTO, que e o que pega som
+  duplicado. Sem `--autoplay-policy`, sem OfflineAudioContext.
+- `tools/curva.mjs` — a curva de ondas antes x depois, lado a lado.
+- `tools/frente.mjs` — para que lado a malha olha (secao 7).
+
+**Armadilhas destas, ja pagas:** jogador morto envenena tudo (secao 5); pausar
+fecha o mapa do TAB e `Input.endFrame()` limpa as teclas todo quadro, entao para
+fotografar o mapao e preciso ficar em `'jogando'` E neutralizar `endFrame`;
+`window.__game.settle()` nao impede o rAF de mexer na cena entre o `evaluate` e o
+`screenshot` (pause antes de compor); e as helices sao alimentadas dentro de
+`AIManager.update`, entao captura com o jogo pausado sai sem pa nenhuma se o lote
+nao for preenchido a mao.
+
+### 11. O que continua aquem
+
+- **O corpo do drone quase nao tem detalhe de superficie.** A silhueta e legivel
+  e a fenda ciano le a 3 m, mas o casco e uma massa escura: sem costura de placa,
+  sem sujeira dirigida, sem desgaste em quina. Um frame de CoD mostraria linha de
+  painel e um risco especular na crista.
+- **A fenda nao floresce.** Com emissivo 3,0 e limiar de bloom em 1,05 ela
+  deveria ter um halo curto; sai chapada, com cara de decalque.
+- **Sem sombra de contato visivel** sob o drone pairando.
+- **1 a 2 amostras em 900 ainda penetram geometria** (0,1-0,2%).
+- **O enxame nao "respira" como grupo**: cada drone decide sozinho. Um enxame de
+  verdade tem formacao, revezamento e reacao coletiva a baixa.
+- **Sem drone de tipo diferente** (kamikaze, sensor puro, pesado). O tema da onda
+  3 se sustenta na quantidade, nao na variedade.

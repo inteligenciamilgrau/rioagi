@@ -514,7 +514,33 @@ export class Movement {
   /* ================================================================ *
    * Utilidades
    * ================================================================ */
+  /**
+   * Teleporte com guarda contra POUSO DEBAIXO DO MORRO.
+   *
+   * O terreno nao tem fundo: a "saia" das bordas e so malha visual, nao entra
+   * no BVH. Quem for posto ABAIXO da cota do terreno nao penetra nada, entao a
+   * depenetracao nao tem em que se apoiar e a sonda de chao nao acha piso
+   * nenhum — o personagem cai em queda livre ate `Player._checarQueda` o
+   * resgatar dezenas de metros abaixo. De dentro do jogo isso le exatamente
+   * como "atravessei o chao", e foi o que uma ferramenta de medicao produziu
+   * ao largar o jogador numa cota FIXA (`cotaMin + 30`) numa borda onde o
+   * morro sobe a 32 m — 5,8 m dentro da encosta. Ver `tools/piso.mjs`.
+   *
+   * A referencia e o PLANO do terreno (`world.heightAt`), nao um raio de cima
+   * para baixo: o raio devolveria o telhado de quem esta dentro de casa e o
+   * teleporte para o interior de uma casa passaria a jogar o jogador em cima
+   * dela. O piso de qualquer construcao esta na cota do terreno ou acima, entao
+   * a guarda so pega quem realmente ficou dentro do morro.
+   *
+   * Avisa em vez de corrigir calado: destino ruim e defeito de quem chamou.
+   */
   teleport(x, y, z) {
+    const chao = this.ctx?.world?.heightAt?.(x, z);
+    if (Number.isFinite(chao) && y < chao - 0.5) {
+      console.warn(`[Movement] teleporte para dentro do morro em (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)}); `
+        + `terreno esta em ${chao.toFixed(1)} m, subindo para a cota do chao`);
+      y = chao + 0.10;
+    }
     this.position.set(x, y, z);
     this.velocity.set(0, 0, 0);
     this.grounded = false;

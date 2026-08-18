@@ -11,6 +11,7 @@ import { Movement, DIM } from './Movement.js';
 import { CameraRig } from './CameraRig.js';
 import { WeaponSystem } from './WeaponSystem.js';
 import { ViewModel } from './ViewModel.js';
+import { QuedaMorte } from './QuedaMorte.js';
 import { WEAPONS, LOADOUT } from './Weapons.js';
 
 const _move = { x: 0, y: 0 };
@@ -117,6 +118,9 @@ export class Player {
     this.rig = new CameraRig(ctx);
     this.weapons = new WeaponSystem(ctx, this.rig);
     this.viewModel = new ViewModel(ctx, this.weapons, this.rig);
+    /* A encenacao da morte. Vive aqui e nao como camada do CameraRig porque
+     * ela nao SOMA nada ao rig: enquanto roda, ela escreve a camera por cima. */
+    this.queda = new QuedaMorte(ctx, this);
 
     this.health = HEALTH_MAX;
     this.maxHealth = HEALTH_MAX;
@@ -176,7 +180,7 @@ export class Player {
       if (typeof p?.health === 'number') this.health = p.health;
       this._sinceDamage = 0;
       this.rig.addShake(THREE.MathUtils.clamp((p?.damage ?? 10) / 55, 0.12, 0.9), p?.fromDir ?? null);
-      if (this.health <= 0 && this.alive) this._die();
+      if (this.health <= 0 && this.alive) this._die(p?.fromDir ?? null);
     }));
     this._unbind.push(bus.on('fx:explosion', (p) => {
       if (!p?.position) return;
@@ -396,6 +400,11 @@ export class Player {
     /* ---------------- câmera ---------------- */
     this.rig.update(dt, _state);
     if (ctx.camera) this.rig.applyTo(ctx.camera);
+    /* A queda da morte entra DEPOIS do `applyTo` e ANTES da copia para a
+     * viewCamera: ela sobrescreve a pose da camera, e o viewmodel tem de
+     * herdar a pose ja tombada — senao a arma segue no eixo antigo enquanto
+     * o mundo gira, que e a leitura de defeito que esta cena nao pode ter. */
+    if (this.queda.ativa) this.queda.update(dt);
     if (ctx.viewCamera && ctx.camera) {
       // O viewmodel vive no espaço da câmera: mesma pose, FOV próprio.
       ctx.viewCamera.position.copy(ctx.camera.position);
@@ -489,18 +498,30 @@ export class Player {
     });
     this._emittingDamage = false;
 
-    if (this.health <= 0) this._die();
+    if (this.health <= 0) this._die(fromDir);
     return this.health;
   }
 
-  _die() {
+  /**
+   * @param {THREE.Vector3|null} fromDir direcao do tiro que matou — a queda usa
+   *   como desempate do lado para onde o corpo tomba.
+   */
+  _die(fromDir = null) {
     if (!this.alive) return;
     this.alive = false;
     this.weapons.enabled = false;
     this.weapons.setTrigger(false);
     this.weapons.setADS(false);
     this.rig.addShake(0.8);
-    this.ctx.state = 'morto';
+    /* O estado NAO vai direto para 'morto': primeiro a encenacao.
+     *
+     * 'caindo' e um estado proprio de proposito. Ficar em 'jogando' manteria a
+     * IA atirando num defunto e a `Progressao` chamando onda; ir direto para
+     * 'morto' congelaria a camera exatamente no quadro em que ela precisa se
+     * mexer. Quem devolve o estado para 'morto' e o FIM da queda, e e so
+     * entao que a tela final entra — ver `player:caiu` no Menu. */
+    this.ctx.state = 'caindo';
+    this.queda.iniciar(fromDir);
     this.ctx.bus?.emit('player:died', {});
   }
 
@@ -511,6 +532,9 @@ export class Player {
    *   colocava o jogador embaixo da geometria, em queda livre infinita.
    */
   respawn(pos = null, yaw = 0) {
+    // Corta a encenacao pela raiz: sem isto, renascer no meio da queda deixaria
+    // `ctx.time.scale` em camera lenta e a camera presa a barra que tomba.
+    this.queda?.cancelar();
     this.alive = true;
     this.health = this.maxHealth;
     this._sinceDamage = 99;

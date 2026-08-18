@@ -1614,3 +1614,74 @@ input[type='range']::-moz-range-thumb {
   padding: 0 4px;
   font-weight: 700;
 }
+
+/* ==========================================================================
+   TELA DE MORTE — botões travados por alguns segundos.
+   O jogador cai no meio da adrenalina, ainda clicando. Sem a trava ele
+   atravessa a tela sem ver. Mas botão que não responde e não explica lê como
+   defeito — por isso a espera é DESENHADA, não apenas imposta.
+   ========================================================================== */
+#tela-morte .bt.travado {
+  cursor: default;
+  color: var(--osso-3);
+}
+/* Barra que enche durante a espera: dá ao jogador algo para observar e diz,
+   sem texto, que o botão vai voltar. Só `transform`, como o resto do projeto. */
+#tela-morte .bt.travado::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--laranja, #e8873c);
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  animation: espera-morte var(--espera, 5s) linear forwards;
+}
+@keyframes espera-morte { to { transform: scaleX(1); } }
+
+/* Ao liberar, um realce curto para o olho voltar ao botão. */
+#tela-morte .bt.liberado { animation: liberou-morte .42s ease-out; }
+@keyframes liberou-morte {
+  0%   { box-shadow: inset 0 0 0 1px rgba(232, 135, 60, .9); }
+  100% { box-shadow: inset 0 0 0 1px rgba(232, 135, 60, 0); }
+}
+
+/* Sem movimento: quem pediu para reduzir animação continua vendo a trava,
+   só que sem a barra correndo. */
+@media (prefers-reduced-motion: reduce) {
+  #tela-morte .bt.travado::after { animation: none; transform: scaleX(1); opacity: .35; }
+  #tela-morte .bt.liberado { animation: none; }
+}
+
+/* ==========================================================================
+   MIRA COM ALVO — hostil na linha de tiro.
+   Confirmação, não promessa: só acende quando o mesmo raio que o disparo usa
+   encontra um hostil E não há parede antes dele.
+   ========================================================================== */
+.hud-mira.no-alvo .traco-mov,
+.hud-mira.no-alvo .grupo-tracos { color: var(--alvo-mira, #ff5b52); }
+.hud-mira.no-alvo path,
+.hud-mira.no-alvo rect,
+.hud-mira.no-alvo line {
+  fill: var(--alvo-mira, #ff5b52);
+  stroke: var(--alvo-mira, #ff5b52);
+}
+/* Fecha um tico: o gesto de "travou" é a mira apertar, não só mudar de cor —
+   quem joga sem distinguir vermelho ainda percebe pelo movimento. */
+.hud-mira.no-alvo { transform: translate(-50%, -50%) scale(.88); }
+.hud-mira { transition: transform .09s ease-out; }
+
+.hud-ponto.no-alvo {
+  background: var(--alvo-mira, #ff5b52);
+  box-shadow: 0 0 0 1px rgba(10, 11, 13, .8), 0 0 7px var(--alvo-mira, #ff5b52);
+}
+.hud-ponto { transition: background .09s ease-out, box-shadow .09s ease-out; }
+
+/* Enquanto a tela de morte está travada o cursor não aparece. O pointer lock
+   já esconde o cursor sozinho, mas o navegador pode soltá-lo por conta própria
+   (troca de aba, perda de foco) — esta regra garante o mesmo resultado sem
+   depender disso. */
+#tela-morte.travada,
+#tela-morte.travada * { cursor: none; }

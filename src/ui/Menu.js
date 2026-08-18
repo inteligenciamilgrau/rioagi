@@ -46,8 +46,20 @@ const ABERTURA = {
   duracao: 1950,     // do início da revelação até o menu ficar clicável
 };
 
+/* Segundos de luto antes de os botoes da tela de morte responderem.
+ *
+ * PORQUE: no instante em que cai, o jogador ainda esta no impulso do
+ * tiroteio — mexendo o mouse, clicando. Sem essa trava ele atravessa a
+ * tela de morte sem ver, e o momento (a musica entrando, o texto) nao
+ * acontece. Cinco segundos e tempo de a adrenalina baixar.
+ *
+ * A espera PRECISA ser visivel: botao que nao responde e nao explica le
+ * como defeito, e o jogador clica mais forte achando que travou. Por isso
+ * o botao mostra a barra enchendo (ver `.bt.travado` em styles.css). */
+const ESPERA_MORTE = 5.0;
+
 const CONTROLES = [
-  ['Movimentar', 'W A S D'], ['Correr', 'Shift'], ['Agachar / Deslizar', 'Ctrl'],
+  ['Movimentar', 'W A S D'], ['Correr', 'Shift'], ['Agachar / Deslizar', 'C'],
   ['Pular / Escalar', 'Espaço'], ['Atirar', 'Botão esq.'], ['Mirar', 'Botão dir.'],
   ['Recarregar', 'R'], ['Abrir porta', 'F'], ['Usar item da mochila', 'E'],
   ['Trocar arma', 'Q'], ['Armas 1-3', '1 2 3'],
@@ -324,6 +336,11 @@ export class Menu {
 
   _acao(nome) {
     const ctx = this.ctx;
+    /* Guarda redundante da tela de morte: se um clique furar o `disabled`
+     * (foco preso, evento sintetico, extensao do navegador), a acao ainda e
+     * ignorada. Vale para os DOIS botoes de la, nao so o de reiniciar. */
+    if (this.telaAtual === 'morte' && !this._morteLiberada) return;
+
     switch (nome) {
       case 'jogar':
         this.mostrar(null);
@@ -391,6 +408,11 @@ export class Menu {
         ctx.bus.emit('game:start', {});
         break;
       case 'sair':
+        /* Abandonar no meio da queda deixaria `ctx.time.scale` em camera lenta
+         * — e o menu inteiro, e a partida seguinte, rodariam a 42% da
+         * velocidade. Quem cancela a encenacao devolve a escala. */
+        clearTimeout(this._tQueda);
+        ctx.player?.queda?.cancelar?.();
         ctx.state = 'menu';
         ctx.input.releaseLock();
         ctx.hud?.setVisible?.(false);
@@ -659,10 +681,48 @@ export class Menu {
     });
 
     on('player:died', () => {
-      this.ctx.state = 'morto';
-      this.ctx.input.releaseLock();
+      /* NAO escrevemos `ctx.state` aqui.
+       *
+       * Quem morre entra em 'caindo' (ver `Player._die`) e e a encenacao da
+       * queda que devolve o estado para 'morto' ao terminar. Forcar 'morto'
+       * neste ponto — como este bloco fazia — congelava o `Player.update` no
+       * primeiro quadro e a queda nunca acontecia.
+       *
+       * E NAO soltamos o ponteiro aqui, tambem de proposito: soltar faz o
+       * cursor do sistema aparecer na hora, e o jogador — ainda no impulso do
+       * tiroteio, mexendo o mouse — passa a arrastar uma setinha por cima da
+       * tela de morte. O lock segue ate a trava de `_travarMorte` liberar; e
+       * ela quem chama `releaseLock` no fim da contagem. */
       this.ctx.hud?.setVisible?.(false);
-      setTimeout(() => this.mostrar('morte'), 900);
+
+      /* Rede de seguranca, nao o caminho normal.
+       *
+       * O caminho normal e `player:caiu`. Este prazo so existe para o caso de
+       * a encenacao nao terminar (excecao no meio da queda, aba em segundo
+       * plano com o rAF suspenso): sem ele o jogador ficaria olhando o proprio
+       * cadaver para sempre, sem tela e sem botao. O valor e o teto da queda
+       * (1,6 s) com folga. */
+      clearTimeout(this._tQueda);
+      this._tQueda = setTimeout(() => {
+        if (this.telaAtual !== 'morte') {
+          console.warn('[Menu] a queda nao avisou que terminou; abrindo a tela de morte');
+          this.ctx.state = 'morto';
+          this.mostrar('morte');
+        }
+      }, 2600);
+    });
+
+    /* Fim da encenacao da queda: agora sim a tela final.
+     *
+     * A trava de 5 s (`_travarMorte`) e disparada por `mostrar('morte')` e
+     * continua sendo a unica dona da espera — a queda acontece ANTES dela e
+     * nao mexe no relogio dela. O que mudou foi so QUANDO a tela entra: era um
+     * prazo cego de 900 ms, agora e o fim da queda. */
+    on('player:caiu', () => {
+      clearTimeout(this._tQueda);
+      this.ctx.state = 'morto';
+      this.ctx.hud?.setVisible?.(false);
+      this.mostrar('morte');
     });
 
     // Pausa por Escape. O pointerlock ja sai sozinho ao apertar Esc, entao
@@ -678,6 +738,47 @@ export class Menu {
 
   /* ------------------------------------------------------------------ */
 
+  /**
+   * Segura os botoes da tela de morte por `ESPERA_MORTE` segundos.
+   *
+   * Alem de desabilitar, marca o botao com a classe que desenha a barra de
+   * espera. `disabled` sozinho tambem impede Enter e Espaco de dispararem —
+   * so mudar a aparencia deixaria o teclado furar a trava.
+   */
+  _travarMorte() {
+    const botoes = [...(this.elMorte?.querySelectorAll('.bt') ?? [])];
+    if (!botoes.length) return;
+    clearTimeout(this._tMorte);
+    this._morteLiberada = false;
+
+    this.elMorte?.classList.add('travada');
+
+    for (const b of botoes) {
+      b.disabled = true;
+      b.classList.remove('liberado');
+      // Reinicia a animacao da barra: sem isto, morrer duas vezes seguidas
+      // reaproveita a animacao ja terminada e a barra nasce cheia.
+      b.classList.remove('travado');
+      void b.offsetWidth;
+      b.classList.add('travado');
+      b.style.setProperty('--espera', ESPERA_MORTE + 's');
+    }
+
+    this._tMorte = setTimeout(() => {
+      this._morteLiberada = true;
+      this.elMorte?.classList.remove('travada');
+      // So agora o cursor aparece: e este o instante em que ha o que clicar.
+      this.ctx.input?.releaseLock?.();
+      for (const b of botoes) {
+        b.disabled = false;
+        b.classList.remove('travado');
+        b.classList.add('liberado');
+      }
+      // Foco so agora: focar um botao desabilitado nao funciona, e focar
+      // depois evita que um Enter guardado dispare no meio da espera.
+      botoes[0]?.focus?.();
+    }, ESPERA_MORTE * 1000);
+  }
   /** @param {'carga'|'menu'|'pausa'|'morte'|null} qual */
   mostrar(qual) {
     this._fecharFolhas();
@@ -686,6 +787,7 @@ export class Menu {
       el?.classList.toggle('ativa', nome === qual);
     }
     this.telaAtual = qual;
+    if (qual === 'morte') this._travarMorte();
     // A marca da pausa desliza junto com o painel na PRIMEIRA vez da sessao e
     // fica parada nas seguintes: Esc se aperta dezenas de vezes por partida e
     // reanimar a mesma logo a cada vez cansa.
@@ -694,7 +796,8 @@ export class Menu {
       this._pausaJaVista = true;
     }
     // Foco no primeiro botao para navegacao por teclado.
-    if (qual && qual !== 'carga') {
+    // Na tela de morte o foco e dado pelo `_travarMorte`, quando liberar.
+    if (qual && qual !== 'carga' && qual !== 'morte') {
       requestAnimationFrame(() => mapa[qual]?.querySelector('.bt')?.focus?.());
     }
   }
@@ -710,6 +813,8 @@ export class Menu {
     this._offs.length = 0;
     if (this._onEsc) window.removeEventListener('keydown', this._onEsc);
     clearTimeout(this._tAbertura);
+    clearTimeout(this._tQueda);
+    clearTimeout(this._tMorte);
     this._encerrarRevelacao();
     this.raiz?.remove();
   }

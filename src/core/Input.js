@@ -10,13 +10,38 @@
 const ESPERA_LOCK_MS = 1300;
 const TENTATIVAS_LOCK = 4;
 
+/* Combos com Ctrl que ENGOLIMOS enquanto o jogador esta em partida.
+ *
+ * Ctrl+S abre "salvar pagina" e Ctrl+D abre "adicionar favorito": os dois
+ * roubam o foco no meio do tiroteio. Como Ctrl deixou de ser tecla do jogo,
+ * chegar aqui e sempre acidente — engolir e o certo.
+ *
+ * A lista e CURTA de proposito. Ctrl+R (recarregar), Ctrl+Shift+I
+ * (ferramentas), Ctrl+T e Ctrl+N sao do usuario e nao nos pertencem;
+ * sequestrar isso e comportamento de site hostil.
+ *
+ * Ctrl+W NAO entra porque nao adianta: fechar aba e atalho reservado do
+ * navegador e nenhum preventDefault o impede. Foi por isso que agachar
+ * saiu do Ctrl — ver ACTION_KEYS.crouch. */
+const CTRL_ENGOLIDOS = new Set(['KeyS', 'KeyD', 'KeyP']);
+
 const ACTION_KEYS = {
   forward:  ['KeyW', 'ArrowUp'],
   back:     ['KeyS', 'ArrowDown'],
   left:     ['KeyA', 'ArrowLeft'],
   right:    ['KeyD', 'ArrowRight'],
   jump:     ['Space'],
-  crouch:   ['ControlLeft', 'KeyC'],
+  /* Agachar e C, NAO Ctrl.
+   *
+   * Ctrl+W fecha a aba, e esse atalho e RESERVADO pelo navegador: nem
+   * `preventDefault` nem `keydown` capturado impedem. Ou seja, com Ctrl
+   * mapeado em agachar, andar agachado para a frente fechava o jogo — e nao
+   * havia conserto possivel do lado do codigo. A unica saida real e nao usar
+   * Ctrl. C e a tecla que os FPS de navegador usam justamente por isto.
+   *
+   * ControlLeft continua fora de proposito: mante-lo como alternativa
+   * preservaria a armadilha para quem tem o costume do Ctrl. */
+  crouch:   ['KeyC'],
   sprint:   ['ShiftLeft'],
   reload:   ['KeyR'],
   use:      ['KeyF'],
@@ -59,8 +84,14 @@ export class Input {
 
   _bind() {
     const onKeyDown = (e) => {
-      // Nao sequestra atalhos do navegador com modificadores.
-      if (e.ctrlKey && e.code !== 'ControlLeft') return;
+      // Nao sequestra atalhos do navegador com modificadores — com a excecao
+      // curta e justificada de CTRL_ENGOLIDOS, e so durante a partida.
+      if (e.ctrlKey && e.code !== 'ControlLeft') {
+        if (this.locked && !e.shiftKey && !e.altKey && CTRL_ENGOLIDOS.has(e.code)) {
+          e.preventDefault();
+        }
+        return;
+      }
 
       /* preventDefault ANTES do early-return de `repeat`.
        *

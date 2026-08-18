@@ -16,11 +16,16 @@
  * player:damaged · player:health · player:died · quality:changed
  */
 
+import * as THREE from 'three';
 import { Killfeed } from './Killfeed.js';
 import { DamageIndicator } from './DamageIndicator.js';
 import { Minimap } from './Minimap.js';
 import { MapaGrande } from './MapaGrande.js';
 import { CAPACIDADE as CAP_MOCHILA } from '../gameplay/Mochila.js';
+
+/* Temporarios do teste de alvo na mira: sem alocacao por chamada. */
+const _origMira = new THREE.Vector3();
+const _dirMira = new THREE.Vector3();
 
 /**
  * Ficha de cada tipo na tela de inventario.
@@ -589,6 +594,54 @@ export class HUD {
     html += '<div class="inv-nota">' + nota + '</div>';
     el.innerHTML = html;
   }
+  /**
+   * Marca a mira quando ha hostil na linha de tiro.
+   *
+   * Usa `ai.raycastEnemies` — A MESMA funcao que o disparo usa (ver
+   * WeaponSystem). Reimplementar a checagem aqui daria uma mira que as vezes
+   * mente: acende sem acertar, ou nao acende num tiro que acerta. Se um dia a
+   * hitbox mudar, as duas mudam juntas.
+   *
+   * O raio do MUNDO vem antes na comparacao: hostil atras de parede nao pode
+   * acender a mira, senao ela vira raio-x — mesma regra do mapa do TAB.
+   *
+   * A 20 Hz, nao por quadro: sao dois raycasts e o olho nao percebe a
+   * diferenca num realce que ja tem transicao curta.
+   */
+  _atualizarAlvoNaMira(dt) {
+    this._tAlvoMira = (this._tAlvoMira ?? 9) + (dt || 0.016);
+    if (this._tAlvoMira < 0.05) return;
+    this._tAlvoMira = 0;
+
+    const ctx = this.ctx;
+    let noAlvo = false;
+    const cam = ctx?.camera;
+    const ai = ctx?.ai;
+
+    if (cam && ai?.raycastEnemies && ctx.state === 'jogando' && ctx.player?.alive !== false) {
+      cam.getWorldDirection(_dirMira);
+      _origMira.setFromMatrixPosition(cam.matrixWorld);
+      const alcance = ctx.player?.weapons?.weapon?.range ?? 200;
+
+      const er = ai.raycastEnemies(_origMira, _dirMira, alcance);
+      if (er && (er.distance ?? Infinity) < Infinity) {
+        // Parede na frente do hostil? Compara com o raio do mundo.
+        const col = ctx.world?.collision;
+        let livre = true;
+        if (col?.raycast) {
+          const rw = col.raycast(_origMira, _dirMira, er.distance - 0.05);
+          livre = !rw?.hit;
+        }
+        noAlvo = livre;
+        this._alvoCabeca = livre && (er.part === 'cabeca' || er.parte === 'cabeca');
+      }
+    }
+
+    if (noAlvo === this._noAlvo) return;
+    this._noAlvo = noAlvo;
+    this.elMira?.classList.toggle('no-alvo', noAlvo);
+    this.elPonto?.classList.toggle('no-alvo', noAlvo);
+  }
   _onWeaponState(p) {
     if (!p) return;
     const nome = p.name ?? this.armaNome;
@@ -873,6 +926,7 @@ export class HUD {
 
     /* ---------- mira dinâmica ---------- */
     this._atualizarMira(dt);
+    this._atualizarAlvoNaMira(dt);
 
     /* ---------- vida, vinhetas, batimento ---------- */
     this._atualizarVida(dt);

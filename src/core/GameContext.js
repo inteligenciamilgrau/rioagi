@@ -31,8 +31,14 @@ export function createContext() {
     hud: null,
     postfx: null,
 
-    time: { dt: 0, elapsed: 0, frame: 0 },
-    state: 'menu',   // 'menu' | 'jogando' | 'pausado' | 'morto'
+    /* `scale` e a camera lenta: o `main.js` multiplica o dt por ela antes de
+     * repassar aos sistemas. `dtReal` guarda o dt de PAREDE do mesmo quadro,
+     * para quem precisa de relogio de verdade (contagem de encenacao, UI). */
+    time: { dt: 0, dtReal: 0, elapsed: 0, frame: 0, scale: 1 },
+    // 'caindo' e a encenacao da morte: o jogador ja perdeu, mas a camera
+    // ainda esta desabando. Nem 'jogando' (ninguem simula) nem 'morto'
+    // (a tela final ainda nao pode entrar).
+    state: 'menu',   // 'menu' | 'jogando' | 'pausado' | 'caindo' | 'morto'
     debug: { enabled: false, stats: null, wireframe: false, freeCam: false },
   };
 }

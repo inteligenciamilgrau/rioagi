@@ -88,25 +88,41 @@ const r = await page.evaluate(() => {
   const chaoS = col.groundAt(baseX - lx * 1.3, baseZ - lz * 1.3);
   const chaoD = col.groundAt(baseX + lx * 1.3, baseZ + lz * 1.3);
 
-  const soldado = ai.spawn({ x: baseX - lx * 1.3, y: chaoS, z: baseZ - lz * 1.3 }, 0, [], 'solo');
-  const drone = ai.spawn({ x: baseX + lx * 1.3, y: chaoD, z: baseZ + lz * 1.3 }, 0, [], 'drone');
-  if (!soldado || !drone) return { ok: false, motivo: 'spawn falhou' };
-  const p = { x: camX, y: camY, z: camZ };
-
-  /* O MESMO cálculo de `AIManager.spawnPerto`, cujo comentário diz
-   * literalmente "vira de frente para o jogador". */
+  /* QUATRO sujeitos numa fileira. Dois soldados e dois drones, cada par com o
+   * yaw "de frente para o jogador" e com esse yaw MAIS 180 graus. Qual dos dois
+   * mostra a fenda ciano responde a pergunta sem margem para interpretação. */
+  const off = [-3.0, -1.0, 1.0, 3.0];
+  const lugar = (i) => {
+    const x = baseX + lx * off[i], z = baseZ + lz * off[i];
+    return { x, y: col.groundAt(x, z), z };
+  };
+  const sujeitos = [];
   const yawPara = (o) => Math.atan2(camX - o.pos.x, camZ - o.pos.z);
 
-  soldado.yaw = soldado.yawAlvo = yawPara(soldado);
-  soldado.soldado.grupo.position.copy(soldado.pos);
-  soldado.soldado.grupo.rotation.y = soldado.yaw;
-  soldado.soldado.update(1 / 60);
-  soldado.soldado.grupo.updateMatrixWorld(true);
-
-  drone.pos.set(baseX + lx * 1.3, chaoD + 1.45, baseZ + lz * 1.3);
-  drone.yaw = drone.yawAlvo = yawPara(drone);
-  drone.arfagem = 0; drone.rolagem = 0;
-  drone._pose(0);
+  for (let i = 0; i < 4; i++) {
+    const L = lugar(i);
+    const tipo = i < 2 ? 'solo' : 'drone';
+    const e = ai.spawn(L, 0, [], tipo);
+    if (!e) continue;
+    const virado = (i % 2 === 1);
+    if (tipo === 'solo') {
+      e.pos.set(L.x, L.y, L.z);
+      e.yaw = e.yawAlvo = yawPara(e) + (virado ? Math.PI : 0);
+      e.soldado.grupo.position.copy(e.pos);
+      e.soldado.grupo.rotation.y = e.yaw;
+      e.soldado.update(1 / 60);
+      e.soldado.grupo.updateMatrixWorld(true);
+    } else {
+      e.pos.set(L.x, L.y + 1.45, L.z);
+      e.yaw = e.yawAlvo = yawPara(e) + (virado ? Math.PI : 0);
+      e.arfagem = 0; e.rolagem = 0;
+      e._pose(0);
+    }
+    sujeitos.push({ tipo, virado, id: e.id });
+  }
+  const soldado = ai.vivos.find((x) => !x.eDrone);
+  const drone = ai.vivos.find((x) => x.eDrone);
+  const p = { x: camX, y: camY, z: camZ };
 
   ctx.state = 'pausado';
   ctx.camera.up.set(0, 1, 0);
@@ -117,21 +133,45 @@ const r = await page.evaluate(() => {
   ctx.lighting?.update?.(0, ctx.time.elapsed);
   window.__game.settle(24);
 
-  // Para onde aponta o +Z local de cada um?
-  const eixo = (obj) => {
-    const zMais = new V(0, 0, 1).applyQuaternion(obj.getWorldQuaternion(new (obj.quaternion.constructor)()));
-    return { x: +zMais.x.toFixed(2), z: +zMais.z.toFixed(2) };
+  /* VEREDITO POR MARCO ANATÔMICO, não por eixo.
+   *
+   * "O +Z local aponta para a câmera" só responde a pergunta se soubermos, sem
+   * dúvida, de que lado do modelo está a cara — e é justamente isso que estava
+   * em disputa. Então comparamos dois pontos CONHECIDOS da malha: um que só
+   * existe na frente e um que só existe atrás. Quem estiver mais perto da
+   * câmera decide, e não há interpretação possível.
+   *
+   *   Soldier  frente = fenda óptica  (0, 1.691, -0.104)
+   *            costas = barra de sinal (0, 1.402, +0.186)
+   *   Drone    frente = fenda óptica  (0, 0.006, -0.322)
+   *            costas = antena        (0.048, 0.306, +0.238) */
+  const cam = new V(camX, camY, camZ);
+  const veredito = (obj, frente, tras) => {
+    obj.updateMatrixWorld(true);
+    const f = frente.clone().applyMatrix4(obj.matrixWorld);
+    const t = tras.clone().applyMatrix4(obj.matrixWorld);
+    const df = f.distanceTo(cam), dt = t.distanceTo(cam);
+    return {
+      distFrente: +df.toFixed(2), distTras: +dt.toFixed(2),
+      mostra: df < dt ? 'FRENTE' : 'COSTAS',
+    };
   };
-  return {
-    ok: true,
-    yawSoldado: +soldado.yaw.toFixed(2),
-    yawDrone: +drone.yaw.toFixed(2),
-    zLocalSoldado: eixo(soldado.soldado.grupo),
-    zLocalDrone: eixo(drone.corpo),
-    // direção da câmera a partir de cada boneco (o que "de frente" deveria ser)
-    paraCameraSoldado: { x: +(camX - soldado.pos.x).toFixed(2), z: +(camZ - soldado.pos.z).toFixed(2) },
-    aberturaDoPonto: melhorNota,
-  };
+  const soldados = ai.vivos.filter((x) => !x.eDrone);
+  const drones = ai.vivos.filter((x) => x.eDrone);
+  const relat = [];
+  for (const s of soldados) {
+    relat.push({
+      tipo: 'soldado', yaw: +s.yaw.toFixed(2),
+      ...veredito(s.soldado.grupo, new V(0, 1.691, -0.104), new V(0, 1.402, 0.186)),
+    });
+  }
+  for (const d of drones) {
+    relat.push({
+      tipo: 'drone', yaw: +d.yaw.toFixed(2),
+      ...veredito(d.corpo, new V(0, 0.006, -0.322), new V(0.048, 0.306, 0.238)),
+    });
+  }
+  return { ok: true, aberturaDoPonto: melhorNota, sujeitos, relat };
 });
 
 await page.screenshot({ path: OUT + '/frente-descartada.png' });

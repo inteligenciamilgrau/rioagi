@@ -330,12 +330,28 @@ let _mat = null;
 let _uEmi = null;
 
 /**
- * Ganho do IBL so da maquina. MESMO valor do Soldier, e pelo MESMO motivo —
- * ver o bloco `ENV_ROBO` em Soldier.js: o three sobrescreve `envMapIntensity`
- * de todo `MeshStandardMaterial` que dependa de `scene.environment`, e a unica
- * saida e o material ter um envMap proprio.
+ * Ganho do IBL do drone.
+ *
+ * O MECANISMO e o mesmo do Soldier (ver o bloco `ENV_ROBO` la): o three
+ * sobrescreve `envMapIntensity` de todo `MeshStandardMaterial` que dependa de
+ * `scene.environment`, e a unica saida e o material ter um envMap proprio.
+ *
+ * O VALOR e maior — 0,55 contra os 0,30 do soldado — e a diferenca e medida,
+ * nao gosto. Um drone de 70 cm visto contra o ceu do entardecer fica quase
+ * sempre em CONTRALUZ: a face que o jogador ve e a que esta de costas para o
+ * sol, e ela so recebe ambiente. Com 0,30 a primeira captura de perto saiu com
+ * o corpo inteiro em preto chapado — nenhuma placa, nenhuma junta, nenhuma
+ * haste de pistao legivel a 3 m, so a fenda ciano boiando. Isso e o defeito que
+ * o CRITICA.md chama de "silhueta sem detalhe" e ainda por cima desperdica a
+ * malha inteira.
+ *
+ * O soldado nao tem esse problema pelo mesmo motivo que nao pode usar 0,55: ele
+ * tem 1,8 m e area grande o bastante para captar sol direto quase sempre, e com
+ * ganho alto ele vira espelho de ceu (foi exatamente o que a calibragem de
+ * `tools/roboCor.mjs` corrigiu). Materiais separados existem justamente para
+ * que cada um tenha a sua dose.
  */
-const ENV_ROBO = 0.30;
+const ENV_ROBO = 0.55;
 
 /**
  * O drone tem material PROPRIO, e nao o `materialSoldado()`. Por que:

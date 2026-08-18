@@ -31,6 +31,17 @@ import { Portas } from './Portas.js';
 const SEED_PADRAO = 20260728;
 const CELULA_NAV = 0.5;
 
+/* Muralha invisivel da borda — ver `_muralhaDeBorda`.
+ *
+ * `MARGEM_BORDA` e medida ate a FACE INTERNA da muralha, que e onde o corpo do
+ * jogador para — nao ate o eixo da caixa. Medir pelo eixo escondia meia
+ * espessura: com 2,5 m "de margem" e 2 m de espessura sobravam 3,5 m de terreno
+ * inalcancavel em todo o perimetro, e a quina do mapa (que e boa para correr e
+ * escapar) simplesmente nao existia para o jogador. */
+const MARGEM_BORDA = 0.6;        // m de terreno alem do corpo do jogador
+const ESPESSURA_MURALHA = 2;     // m; grossa para nenhum passo atravessar
+const ALTURA_MURALHA = 30;       // m acima da cota mais alta do morro
+
 // temporarios de escopo de modulo (sem alocacao por frame)
 const _camPos = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -108,7 +119,8 @@ export class World {
       .construir(this.buildings.portas, this.buildings.protoPorta)
       .ligar(this.group);
 
-    // 7) colisao
+    // 7) colisao — a muralha entra ANTES do build, senao fica fora do BVH
+    this._muralhaDeBorda();
     this.collision.build();
 
     // 8) navegacao e pontos de interesse
@@ -144,6 +156,64 @@ export class World {
       msGeracao: Math.round(t1 - t0),
     };
     return this;
+  }
+
+
+  /**
+   * Muralha invisivel na borda do mundo.
+   *
+   * Ja existia uma rede em `Player._checarQueda`, mas ela e RECUPERACAO, nao
+   * prevencao: o jogador cai vinte e tantos metros no vazio antes de ser
+   * devolvido, e essa queda le como jogo quebrado. Barreira de colisao resolve
+   * antes de acontecer — voce esbarra e desliza, como em qualquer parede.
+   *
+   * Fica um pouco PARA DENTRO da borda do terreno (`MARGEM_BORDA`, medida ate a
+   * face interna): a margem existe so para o corpo nao ficar pendurado sobre o
+   * vazio quando encosta. O raio da capsula e 0,35 m, entao 0,6 m ja deixa o
+   * corpo inteiro sobre terreno com folga — e a quina do mapa continua sendo
+   * lugar de correr, que e para o que ela serve. Medido em `tools/muralha.mjs`
+   * andando, agachado e deslizando contra as quatro bordas.
+   *
+   * Alta o bastante para nao ser pulada nem escalada a partir de laje alta —
+   * vai da cota mais baixa do terreno ate bem acima da mais alta.
+   *
+   * Invisivel de proposito: e limite de arena, nao cenario. Muro visivel na
+   * borda pediria textura, sombra e explicacao na ficcao; a barreira boa e a
+   * que o jogador so descobre se for procurar.
+   */
+  _muralhaDeBorda() {
+    /* A caixa nasce meia espessura PARA FORA da face que interessa: o que fica
+     * dentro do mapa e a face interna, e e ela que define o limite jogavel. */
+    const faceInterna = this.size * 0.5 - MARGEM_BORDA;
+    const meia = faceInterna + ESPESSURA_MURALHA * 0.5;
+    const base = this.favela.cotaMin - 6;
+    const topo = this.favela.cotaMax + ALTURA_MURALHA;
+    const h = topo - base;
+    const cy = base + h * 0.5;
+    const comp = this.size + ESPESSURA_MURALHA * 2 + MARGEM_BORDA * 2;
+
+    // Quatro paredes. `yaw` 0 para as de X, PI/2 para as de Z.
+    const paredes = [
+      [0, cy, -meia, comp, h, ESPESSURA_MURALHA, 0],
+      [0, cy, meia, comp, h, ESPESSURA_MURALHA, 0],
+      [-meia, cy, 0, ESPESSURA_MURALHA, h, comp, 0],
+      [meia, cy, 0, ESPESSURA_MURALHA, h, comp, 0],
+    ];
+    for (const [x, y, z, w, hh, d, yaw] of paredes) {
+      // Superficie `concreto`: se uma bala bater aqui, o impacto soa como
+      // muro em vez de silencio — barreira muda so onde da para andar.
+      this.collision.addBox(x, y, z, w, hh, d, yaw, 'concreto');
+    }
+    /* Publicado porque quem mede precisa saber onde a barreira esta sem
+     * recalcular a conta (e sem errar meia espessura). `topo` tambem serve de
+     * teto para sonda de cima para baixo: raio largado acima disso acerta a
+     * muralha e nao o mundo — ver `tools/piso.mjs`. */
+    this.muralha = {
+      paredes: paredes.length,
+      meia, faceInterna, base, topo,
+      espessura: ESPESSURA_MURALHA, margem: MARGEM_BORDA,
+    };
+    this._muralha = paredes.length;
   }
 
   // ------------------------------------------------------------- terreno
@@ -488,6 +558,21 @@ export class World {
       if (cv.tipo === 'veiculo') bloquearObb(cv.position.x, cv.position.z, 4.3, 1.9, Math.atan2(cv.normal.x, cv.normal.z), 0.1);
     }
     bloquearObb(this.favela.campinho.x, this.favela.campinho.z, 0, 0, 0, 0); // no-op semantico
+
+    /* 4b) atras da muralha nao se anda.
+     * A malha sai do PLANO, que nao sabe da barreira; sem isto a IA planeja
+     * caminho para uma faixa que a colisao proibe e fica raspando na parede
+     * invisivel. `RAIO_CAPSULA` porque quem para na face interna e o CORPO. */
+    if (this.muralha) {
+      const RAIO_CAPSULA = 0.35;
+      const lim = this.muralha.faceInterna - RAIO_CAPSULA;
+      for (let j = 0; j < h; j++) {
+        for (let i = 0; i < w; i++) {
+          const x = origin.x + (i + 0.5) * cs, z = origin.z + (j + 0.5) * cs;
+          if (Math.abs(x) > lim || Math.abs(z) > lim) data[j * w + i] = 0;
+        }
+      }
+    }
 
     // 5) conectividade: tudo que nao alcanca a rua principal vira bloqueado
     const rua = this.favela.vias[0];

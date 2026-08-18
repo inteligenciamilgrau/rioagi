@@ -28,6 +28,21 @@ import { Menu } from './ui/Menu.js';
 
 const MAX_DT = 0.05; // 20fps piso — abaixo disso a simulacao desacelera em vez de estourar
 
+/* Passo de redesenho na tela de morte.
+ *
+ * Com o jogador morto a cena esta CONGELADA: ninguem anda, a IA nao roda, a
+ * camera nao mexe. Redesenhar 5,9 M de triangulos 60 vezes por segundo para
+ * produzir o MESMO quadro e desperdicio puro, e foi o que a medicao apontou
+ * como a causa do engasgo relatado — em `tools/telafinal.mjs`, o render valia
+ * 13,4 dos 14,1 ms do quadro da tela de morte, contra 0,7 ms de TODO o resto
+ * (overlay de DOM, audio, mundo, pos-processamento).
+ *
+ * 4 da ~15 Hz, que e mais que suficiente para uma imagem parada por tras de um
+ * veu vermelho — e ainda mantem o pos-processamento vivo, entao a tela nao le
+ * como travada. Congelar de vez (nunca redesenhar) foi descartado: em driver
+ * que nao preserva o buffer de desenho o canvas pode piscar preto. */
+const PASSO_MORTO = 4;
+
 class Game {
   constructor() {
     this.ctx = createContext();
@@ -144,27 +159,54 @@ class Game {
   frame() {
     const ctx = this.ctx;
     const raw = ctx.clock.getDelta();
-    const dt = Math.min(raw, MAX_DT);
+    const dtReal = Math.min(raw, MAX_DT);
+
+    /* Camera lenta. A escala e escrita por quem encena (hoje, a queda da morte
+     * em `src/player/QuedaMorte.js`) e multiplica o dt de TODOS os sistemas —
+     * e por isso que a desaceleracao vale para camera, particulas e molas de
+     * uma vez, em vez de cada um ter o seu proprio fator.
+     *
+     * `dtReal` continua disponivel em `ctx.time.dtReal`: quem conta tempo de
+     * PAREDE (a duracao da encenacao, a barra de espera da tela de morte) tem
+     * de ler dali, senao a camera lenta estica tambem a espera do jogador. */
+    const escala = ctx.time.scale ?? 1;
+    const dt = dtReal * escala;
+    ctx.time.dtReal = dtReal;
     ctx.time.dt = dt;
     ctx.time.elapsed += dt;
     ctx.time.frame++;
 
     const running = ctx.state === 'jogando';
+    // Durante a queda so anda o que a camera precisa: o Player (que move a
+    // camera e o viewmodel) e o FX (poeira e particulas ja no ar terminam o
+    // curso). IA, ondas e itens ficam parados — o jogador ja perdeu, ninguem
+    // mais atira nele, e congelar o campo e o que barateia o quadro.
+    const caindo = ctx.state === 'caindo';
+    const morto = ctx.state === 'morto';
 
     for (const s of this.systems) {
-      // Sistemas de mundo/render seguem rodando pausados (ceu, pos-processamento, HUD);
+      if (running) { s.update?.(dt, ctx.time.elapsed); continue; }
+      if (caindo && (s === ctx.player || s === ctx.fx)) { s.update?.(dt, ctx.time.elapsed); continue; }
+      // Sistemas de mundo/render seguem rodando pausados (ceu, audio, musica);
       // simulacao (player, ai, fx) congela.
-      if (!running && s.pausable !== false) continue;
-      s.update?.(dt, ctx.time.elapsed);
+      if (s.pausable === false) s.update?.(dt, ctx.time.elapsed);
     }
     if (!running) {
-      ctx.sky?.update?.(dt, ctx.time.elapsed);
-      ctx.lighting?.update?.(dt, ctx.time.elapsed);
+      /* Ceu e iluminacao ficam de fora na tela de morte: a camera esta parada,
+       * o sol nao anda e as cascatas de sombra ja estao onde tem de estar.
+       * O `Sky` regenera o mapa de ambiente a cada 96 quadros (um PMREM
+       * inteiro), e isso e um PICO de quadro a cada 1,6 s numa tela em que
+       * nada muda. Na queda os dois seguem, porque a camera esta viajando. */
+      if (!morto) {
+        ctx.sky?.update?.(dt, ctx.time.elapsed);
+        ctx.lighting?.update?.(dt, ctx.time.elapsed);
+      }
       ctx.hud?.update?.(dt, ctx.time.elapsed);
       ctx.postfx?.update?.(dt, ctx.time.elapsed);
     }
 
-    ctx.engine.render();
+    // Ver PASSO_MORTO: a tela de morte redesenha a ~15 Hz em vez de 60.
+    if (!morto || ctx.time.frame % PASSO_MORTO === 0) ctx.engine.render();
     ctx.input.endFrame();
   }
 

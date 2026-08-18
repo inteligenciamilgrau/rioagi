@@ -1688,14 +1688,28 @@ export class AudioEngine {
    */
   droneInvestida(pos) {
     if (!this.ativo) return;
-    const a = this.actx;
-    const t0 = a.currentTime + 0.001;
+    const t0 = this.actx.currentTime + 0.001;
     const ent = this._voz(pos, {
       cauda: 0.16, beco: 0.30, ganho: 0.52, vida: 0.55, alcance: 46,
       prio: PRIO.droneInvestida,
     });
     if (!ent) return;
+    /* PELO CACHE, como tiro/impacto/passo/cartucho.
+     *
+     * Montado camada a camada, este som custa ~12 nos por chamada. Num enxame
+     * ele sai ate `maxAtiradores` vezes por ciclo de ~4 s, e cada telegrafo
+     * empilhava uma dezena de nos SINTETIZANDO AO MESMO TEMPO — que e o que o
+     * cabecalho deste arquivo identifica como a causa do estalo, e nao o numero
+     * de vozes. Pelo cache custa UM no. Continua 100% procedural: quem gera o
+     * buffer e este mesmo codigo, rodado antes em vez de durante. */
+    if (!this._tocaCache('droneInvestida', ent, t0, 0.45, 1, function (alvo, td) {
+      this._camadasDroneInvestida(alvo, td);
+    })) {
+      this._camadasDroneInvestida(ent, t0);
+    }
+  }
 
+  _camadasDroneInvestida(ent, t0) {
     const dur = 0.34;
     const v = 0.94 + Math.random() * 0.12;
     // varredura ascendente em duas vozes (quinta), o "carregando"
@@ -1723,14 +1737,22 @@ export class AudioEngine {
   /** Drone abatido: guincho descendente das pas perdendo rotacao. */
   droneQueda(pos) {
     if (!this.ativo) return;
-    const a = this.actx;
-    const t0 = a.currentTime + 0.001;
+    const t0 = this.actx.currentTime + 0.001;
     const ent = this._voz(pos, {
       cauda: 0.24, beco: 0.34, ganho: 0.6, vida: 1.1, alcance: 52,
       prio: PRIO.droneQueda,
     });
     if (!ent) return;
+    /* Tambem pelo cache: numa onda de enxame o jogador derruba drone em rajada,
+     * e tres quedas juntas montadas ao vivo sao ~30 nos de uma vez. */
+    if (!this._tocaCache('droneQueda', ent, t0, 1.05, 1, function (alvo, td) {
+      this._camadasDroneQueda(alvo, td);
+    })) {
+      this._camadasDroneQueda(ent, t0);
+    }
+  }
 
+  _camadasDroneQueda(ent, t0) {
     const dur = 0.9;
     const o = this._osc('sawtooth', t0, 330, 58, dur);
     const lp = this._filtro('lowpass', 2200, 1.4);
@@ -2029,8 +2051,24 @@ export class AudioEngine {
       bus.on('player:footstep', (p) => this.passo(p?.surface || 'concreto', p?.position, !!p?.running)),
       bus.on('player:land', (p) => this.aterrissagem(p?.velocity ?? 3, p?.surface)),
       bus.on('player:damaged', (p) => this.danoJogador(Math.min(1, (p?.damage ?? 10) / 30))),
-      bus.on('enemy:damaged', (p) => { if (Math.random() < 0.55) this.grito(p?.point, 'dor'); }),
-      bus.on('enemy:killed', (p) => this.grito(p?.point, 'morte')),
+      /* `eDrone` no payload silencia o GRITO HUMANO em cima de uma maquina que
+       * voa. Duas razoes, e as duas contam:
+       *
+       *  1. FICCAO: um drone nao geme de dor nem grita ao morrer. Ele tem som
+       *     proprio de queda (`droneQueda`), que a AI dispara no abate.
+       *  2. CUSTO: `grito` NAO passa pelo cache de forma de onda (e raro e
+       *     depende do timbre sorteado na hora), entao cada um monta ~12 nos ao
+       *     vivo. Numa onda de enxame o jogador acerta drone varias vezes por
+       *     segundo, e 55% desses acertos viravam um grito sintetizado na hora
+       *     — dezenas de nos por segundo, que e exatamente a moeda em que o
+       *     estalo e cobrado (ver o cabecalho deste arquivo).
+       *
+       * Quem nao manda `eDrone` continua como antes: hostil de chao segue
+       * gritando. */
+      bus.on('enemy:damaged', (p) => {
+        if (!p?.eDrone && Math.random() < 0.55) this.grito(p?.point, 'dor');
+      }),
+      bus.on('enemy:killed', (p) => { if (!p?.eDrone) this.grito(p?.point, 'morte'); }),
       bus.on('game:pause', () => { this._pausa(true); }),
       bus.on('game:resume', () => { this._pausa(false); }),
     );

@@ -141,6 +141,9 @@ export class ViewModel {
     this.swayR = new Spring3(10, 0.80);
 
     this.time = 0;
+    /* 0..1 — quanto a arma ja saiu da mao na queda da morte. Escrito por
+     * `QuedaMorte`; ver a camada aditiva no fim de `update()`. */
+    this.quedaT = 0;
     this.fovSpring = new Spring(13, 1);
     this._boltT = 0;
     this._boltDur = 0.07;
@@ -454,6 +457,27 @@ export class ViewModel {
       this.rot.x.x + this.recoilRot.x.x,
       this.rot.y.x + this.recoilRot.y.x,
       this.rot.z.x + this.recoilRot.z.x);
+
+    /* --- morte: a arma cai da mao (escrito por QuedaMorte) ---------------
+     *
+     * `quedaT` vai de 0 a 1 durante a queda. A arma afunda e rola para fora do
+     * quadro, e some de vez no fim. NAO da para so apagar no primeiro quadro:
+     * o viewmodel e desenhado com o depth zerado, POR CIMA de tudo, entao uma
+     * arma deixada parada enquanto o mundo tomba vira um adesivo deslizando
+     * sobre o chao — e apagar de estalo le como falha de render. Descer e
+     * girar em 0,2 s de simulacao le como "soltou o fuzil".
+     *
+     * Camada ADITIVA, depois da composicao final e nao dentro dela: assim a
+     * pose de quadril/ADS/corrida continua sendo calculada normalmente e nao
+     * ha um segundo caminho de codigo para manter. */
+    if (this.quedaT > 0) {
+      const q = Math.min(1, this.quedaT);
+      this.body.position.y -= q * 0.42;
+      this.body.position.z += q * 0.12;
+      this.body.rotation.z += q * 1.15;
+      this.body.rotation.x -= q * 0.55;
+    }
+    this.root.visible = this.root.visible && this.quedaT < 0.995;
 
     /* --- rig acompanha a câmera do viewmodel --- */
     const vc = this.ctx.viewCamera;
