@@ -19,7 +19,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = 5178;
+// Porta configuravel com --port: permite varios agentes capturarem em paralelo
+// sem brigar pelo mesmo socket. Sem o flag, mantem o 5178 historico.
+const PORT = Number(
+  (process.argv.includes('--port') ? process.argv[process.argv.indexOf('--port') + 1] : null)
+  ?? process.env.SHOT_PORT ?? 5178,
+);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 
 // ---------- args ----------
@@ -80,8 +85,14 @@ try {
     ],
   });
 
+  // --width/--height: captura menor para iteracao rapida de agente. A avaliacao
+  // final continua em 1920x1080, que e o que o manifesto registra.
+  const vp = { ...(cfg.viewport ?? { width: 1920, height: 1080 }) };
+  if (arg('width')) vp.width = Number(arg('width'));
+  if (arg('height')) vp.height = Number(arg('height'));
+
   const page = await browser.newPage({
-    viewport: cfg.viewport ?? { width: 1920, height: 1080 },
+    viewport: vp,
     deviceScaleFactor: 1,
     colorScheme: 'dark',
   });
