@@ -717,6 +717,20 @@ export class Enemy {
     const col = this.ctx.world?.collision;
     let superficie = 'concreto';
     let noChao = false;
+    /* A sonda de chao e CONTABILIZADA no orcamento do `AIManager` (prioridade
+     * de seguranca), mas NUNCA negada.
+     *
+     * MEDIDO NA MARRA: a versao que podia negar segurava a altura por um quadro
+     * em vez de sondar. Parecia inofensivo — 8 cm de erro a 5 m/s. Nao e: a
+     * boca do cano do hostil sai da matriz do esqueleto, que sai da altura do
+     * corpo, e o tiro so acerta se o raio da boca ate o jogador estiver livre.
+     * Com a altura defasada num morro de 36 m de desnivel o tiro passa a bater
+     * no proprio chao. `tools/pressao.mjs` acusou: acerto da IA caindo de
+     * 74,8% para 41,9% e dano por minuto de 392 para 114, com os hostis
+     * parando a 13-33 m em vez de fechar para 4-19 m.
+     *
+     * A economia aqui era de 2 raios por quadro no p99. Nao vale o preco. */
+    this.ctx.ai?.pedirRaio?.(2);
     if (col?.raycast) {
       /* Sonda longa: 2 m acima e 12 m abaixo. A anterior olhava só 4 m no
        * total, então ao sair de uma laje o raio não achava nada, o `y` ficava

@@ -24,6 +24,28 @@ const CACHE_MAX = 48;
 const CACHE_TTL = 4.0;               // s
 const NOS_MAX = 9000;                // teto de expansao por busca
 
+/**
+ * Teto de nos expandidos POR QUADRO, somando todas as buscas.
+ *
+ * MEDIDO (`tools/miolo.mjs`, 14 hostis + 10 drones, 16 180 quadros): o `_astar`
+ * tinha p99 de 1,99 ms e um PIOR de **30,61 ms num unico quadro** — dois quadros
+ * inteiros perdidos, dentro do `ai.update`, sem coleta de lixo e sem programa
+ * novo. A conta bate: `MAX_BUSCAS_FRAME = 4` vezes `NOS_MAX = 9000` autoriza
+ * 36 000 expansoes num quadro so, e o pico registrado expandiu 18 888.
+ *
+ * "Quatro buscas por quadro" nunca foi um orcamento de CPU — e um orcamento de
+ * CHAMADAS, e o custo de uma chamada varia 100x conforme a distancia e conforme
+ * ela achar ou nao o destino (busca que FALHA paga os 9 000 inteiros antes de
+ * desistir). O orcamento de verdade e em NOS, que e o que custa.
+ *
+ * 3 000 nos por quadro a 60 Hz sao 180 000 por segundo: uma travessia de mapa
+ * inteiro (mapa de 180 m) cabe em 2 a 4 quadros, e o agente nao para de andar
+ * enquanto isso porque ele so recebe o caminho novo no fim (ate la segue o
+ * antigo). O que se perde: latencia de ate ~60 ms para uma rota longa. O que se
+ * ganha: o pico de 30 ms deixa de existir por construcao.
+ */
+const NOS_POR_QUADRO = 3000;
+
 const _cel = { x: 0, z: 0 };
 const _celB = { x: 0, z: 0 };
 
@@ -105,6 +127,14 @@ export class NavGrid {
     this._fila = [];
     this._porChave = new Map();
     this._poolPedidos = [];
+
+    /* Orcamento de expansao. `_nosQuadro` zera em `update()`; `_emCurso` guarda
+     * a busca que foi SUSPENDIDA no meio e sera retomada no quadro seguinte. */
+    this._nosQuadro = 0;
+    this._nosDaBusca = 0;
+    this._gerSuspensa = 0;
+    this._emCurso = null;
+    this._destinoEmCurso = new THREE.Vector3();
 
     // buffers de saida reaproveitados
     this._celPath = new Int32Array(4096);
@@ -241,14 +271,36 @@ export class NavGrid {
    * Busca sincrona. Preenche `this._celPath` com indices de celula.
    * @returns {boolean}
    */
-  _astar(kInicio, kFim) {
+  /**
+   * @param {number} kInicio
+   * @param {number} kFim
+   * @param {boolean} orcado se true, respeita `NOS_POR_QUADRO` e pode SUSPENDER
+   * @param {boolean} retomando se true, continua a busca suspensa (nao reinicia)
+   * @returns {true|false|'pausa'}
+   */
+  _astar(kInicio, kFim, orcado = false, retomando = false) {
     const t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
     const { w, h } = this;
     const g = this._g, veio = this._veio, selo = this._selo, est = this._estado;
     const heap = this._heap;
-    const ger = ++this._geracao;
-    heap.limpar();
-    this.stats.buscas++;
+
+    let ger;
+    if (retomando) {
+      /* Retomada: a geracao, o heap e os arrays de custo continuam EXATAMENTE
+       * como ficaram. E por isso que nenhuma outra busca pode comecar enquanto
+       * esta esta suspensa — `update()` garante isso. */
+      ger = this._gerSuspensa;
+    } else {
+      ger = ++this._geracao;
+      heap.limpar();
+      this.stats.buscas++;
+      this._nosDaBusca = 0;
+      g[kInicio] = 0; veio[kInicio] = -1; selo[kInicio] = ger; est[kInicio] = 1;
+      const hi = kInicio % w, hj = (kInicio / w) | 0;
+      const dxi = Math.abs(hi - (kFim % w)), dzi = Math.abs(hj - ((kFim / w) | 0));
+      const mni = Math.min(dxi, dzi);
+      heap.inserir(kInicio, (dxi + dzi - 2 * mni) + CUSTO_DIAG * mni);
+    }
 
     const fi = kFim % w, fj = (kFim / w) | 0;
     const heur = (i, j) => {
@@ -257,17 +309,25 @@ export class NavGrid {
       return (dx + dz - 2 * mn) + CUSTO_DIAG * mn;
     };
 
-    g[kInicio] = 0; veio[kInicio] = -1; selo[kInicio] = ger; est[kInicio] = 1;
-    heap.inserir(kInicio, heur(kInicio % w, (kInicio / w) | 0));
-
-    let nos = 0;
+    let nos = this._nosDaBusca;
     let achou = false;
     while (heap.n > 0) {
+      /* SUSPENSAO. O teto e em NOS somados no QUADRO, nao por busca: e o
+       * numero que corresponde ao tempo. Quando estoura, a busca guarda o
+       * estado e continua no quadro seguinte de onde parou — nenhum trabalho
+       * e jogado fora e nenhum quadro leva o pico inteiro. */
+      if (orcado && this._nosQuadro >= NOS_POR_QUADRO) {
+        this._nosDaBusca = nos;
+        this._gerSuspensa = ger;
+        this.stats.ultimoMs = ((typeof performance !== 'undefined') ? performance.now() : 0) - t0;
+        return 'pausa';
+      }
       const k = heap.remover();
       if (selo[k] !== ger || est[k] === 2) continue;
       est[k] = 2;
       if (k === kFim) { achou = true; break; }
       if (++nos > NOS_MAX) break;
+      this._nosQuadro++;
 
       const ki = k % w, kj = (k / w) | 0;
       const gk = g[k];
@@ -305,7 +365,8 @@ export class NavGrid {
       }
     }
 
-    this.stats.nos += nos;
+    this.stats.nos += nos - (retomando ? 0 : 0);
+    this._nosDaBusca = 0;
     this.stats.ultimoMs = ((typeof performance !== 'undefined') ? performance.now() : 0) - t0;
     if (!achou) { this.stats.falhas++; this._nCelPath = 0; return false; }
 
@@ -412,24 +473,41 @@ export class NavGrid {
   cancelar(chave) {
     const p = this._porChave.get(chave);
     if (p) p.ativo = false;
+    if (this._emCurso?.pedido?.chave === chave) { this._emCurso.pedido.cb = null; this._emCurso = null; }
   }
 
-  /** Processa ate MAX_BUSCAS_FRAME pedidos, os de maior prioridade primeiro. */
+  /**
+   * Processa pedidos ate estourar o orcamento de NOS do quadro.
+   *
+   * Ordem: primeiro RETOMA a busca suspensa (se houver) — enquanto uma busca
+   * esta no meio, o heap e os selos de geracao sao dela e nenhuma outra pode
+   * comecar. Depois admite pedidos novos, os de maior prioridade primeiro.
+   */
   update(dt) {
     this._tempo += dt;
-    if (!this.pronto || this._fila.length === 0) return;
+    this._nosQuadro = 0;
+    if (!this.pronto) return;
+
+    // --- 1. retoma o que ficou pela metade no quadro anterior ---
+    if (this._emCurso) {
+      const c = this._emCurso;
+      const r = this._continuar(c);
+      if (r === 'pausa') return;                  // ainda nao terminou; sem orcamento
+      this._emCurso = null;
+      this._entregar(c.pedido, r);
+    }
+
+    if (this._fila.length === 0) return;
     if (this._fila.length > 1) this._fila.sort((a, b) => b.prio - a.prio);
 
     let feitos = 0;
-    while (this._fila.length && feitos < MAX_BUSCAS_FRAME) {
+    while (this._fila.length && feitos < MAX_BUSCAS_FRAME && this._nosQuadro < NOS_POR_QUADRO) {
       const p = this._fila.shift();
       this._porChave.delete(p.chave);
       if (!p.ativo) { this._poolPedidos.push(p); continue; }
-      const ok = this.buscar(p.origem, p.destino);
-      try { p.cb(this._pontos, this._nPontos, ok); }
-      catch (e) { console.error('[AI/NavGrid] callback de caminho lancou:', e); }
-      p.cb = null;
-      this._poolPedidos.push(p);
+      const c = this._comecar(p);
+      if (c === 'pausa') return;                  // suspendeu: continua no proximo quadro
+      this._entregar(p, c);
       feitos++;
     }
     // limpeza do cache por TTL
@@ -441,6 +519,77 @@ export class NavGrid {
     }
   }
 
+  /** Entrega o resultado ao pedinte e devolve o pedido ao pool. */
+  _entregar(p, ok) {
+    try { p.cb(this._pontos, this._nPontos, ok); }
+    catch (e) { console.error('[AI/NavGrid] callback de caminho lancou:', e); }
+    p.cb = null;
+    this._poolPedidos.push(p);
+  }
+
+  /**
+   * Comeca uma busca respeitando o orcamento de nos do quadro.
+   * @returns {true|false|'pausa'}
+   */
+  _comecar(p) {
+    this._nPontos = 0;
+    const kI = this.celMaisProxima(p.origem, 12);
+    const kF = this.celMaisProxima(p.destino, 16);
+    if (kI < 0 || kF < 0) return false;
+
+    if (kI === kF) {
+      let v = this._pontos[0];
+      if (!v) { v = new THREE.Vector3(); this._pontos[0] = v; }
+      v.copy(p.destino); this._nPontos = 1;
+      return true;
+    }
+
+    const chave = kI * 1e7 + kF;
+    const c = this._cache.get(chave);
+    if (c && this._tempo - c.t < CACHE_TTL) {
+      this.stats.cacheHit++;
+      for (let i = 0; i < c.n; i++) {
+        let v = this._pontos[i];
+        if (!v) { v = new THREE.Vector3(); this._pontos[i] = v; }
+        v.copy(c.pts[i]);
+      }
+      this._nPontos = c.n;
+      return true;
+    }
+
+    const r = this._astar(kI, kF, true, false);
+    if (r === 'pausa') {
+      this._destinoEmCurso.copy(p.destino);
+      this._emCurso = { pedido: p, kI, kF, chave, destino: this._destinoEmCurso };
+      return 'pausa';
+    }
+    return this._terminar(r, kI, kF, chave, p.destino);
+  }
+
+  /** Continua a busca suspensa. @returns {true|false|'pausa'} */
+  _continuar(c) {
+    const r = this._astar(c.kI, c.kF, true, true);
+    if (r === 'pausa') return 'pausa';
+    return this._terminar(r, c.kI, c.kF, c.chave, c.destino);
+  }
+
+  /** Suavizacao + ancoragem no destino + cache. Comum aos dois caminhos. */
+  _terminar(achou, kI, kF, chave, destino) {
+    void kI; void kF;
+    if (!achou) return false;
+    this._suavizar();
+    // o ultimo ponto vai exatamente no destino pedido (nao no centro da celula)
+    if (this._nPontos > 0) {
+      const ult = this._pontos[this._nPontos - 1];
+      const dy = ult.y;
+      ult.copy(destino); ult.y = dy;
+    }
+    const pts = new Array(this._nPontos);
+    for (let i = 0; i < this._nPontos; i++) pts[i] = this._pontos[i].clone();
+    this._cache.set(chave, { pts, n: this._nPontos, t: this._tempo });
+    return true;
+  }
+
   /**
    * Busca sincrona completa (celula -> A* -> suavizacao). Resultado em
    * `this._pontos` / `this._nPontos`. Use `update()` no caminho quente.
@@ -448,6 +597,11 @@ export class NavGrid {
   buscar(origem, destino) {
     this._nPontos = 0;
     if (!this.pronto) return false;
+    /* Uma busca suspensa e dona do heap e dos selos de geracao. Se alguem pede
+     * uma busca sincrona no meio dela, a suspensa e ABANDONADA — o agente dela
+     * segue com o caminho antigo e pede de novo no proximo `_irPara`. Trocar a
+     * ordem (deixar a sincrona esperar) travaria a ferramenta que a usa. */
+    if (this._emCurso) { this._emCurso.pedido.cb = null; this._emCurso = null; }
     const kI = this.celMaisProxima(origem, 12);
     const kF = this.celMaisProxima(destino, 16);
     if (kI < 0 || kF < 0) return false;
@@ -491,6 +645,7 @@ export class NavGrid {
   limparCache() { this._cache.clear(); }
 
   dispose() {
+    this._emCurso = null;
     this._fila.length = 0;
     this._porChave.clear();
     this._poolPedidos.length = 0;

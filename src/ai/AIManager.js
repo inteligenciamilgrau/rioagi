@@ -27,6 +27,8 @@ const _ouvido = new THREE.Vector3();
 const _dc = new THREE.Vector3();
 /** Centroide do enxame, para o zumbido compartilhado. */
 const _enx = new THREE.Vector3();
+/** Esfera de teste do frustum, no LOD. Propria: `_raioEsfera` usa a dele. */
+const _esfera = new THREE.Sphere();
 
 /** Hitboxes: segmentos entre ossos + raio. Ordem importa (cabeca primeiro). */
 const HITBOXES = [
@@ -46,6 +48,41 @@ const RAIO_GROSSO = 1.15;      // esfera envolvente para rejeicao rapida
 const ALTURA_CENTRO = 1.0;
 const FICHAS_LOS = 6;          // raycasts de percepcao por frame
 const DIST_LOD = 38;           // alem disso o agente pensa a 5Hz
+
+/* ======================================================================== *
+ * ORCAMENTO DE RAIOS — UM SO, COMPARTILHADO POR TODA A IA
+ *
+ * O que existia antes: `FICHAS_LOS = 6` cobrindo APENAS a linha de visada da
+ * percepcao. Todo o resto atirava a vontade.
+ *
+ * MEDIDO (`tools/miolo.mjs`, 14 hostis de chao + 10 drones, 3 297 quadros):
+ *
+ *   raios por quadro   p50 62 · p99 85 · max 109
+ *   deles, percepcao   p50  6 · p99 14 · max  16
+ *   => 71 dos 85 do p99 (84%) FORA de qualquer orcamento
+ *
+ *   quem atira (p99):  drone.voo 40 · audicao 19 · solo.mover 16 · percepcao 14
+ *
+ * O `Drone._mover` sozinho atira 4 raios por drone por quadro — 47% de todos os
+ * raios do jogo. E `raycast` custa ~12 us de CPU e **817 B de lixo** por chamada
+ * (medido em `tools/lixoai.mjs`): 85 raios sao ~1 ms de CPU e ~70 KB de lixo por
+ * quadro, sem tocar na GPU. E exatamente o sintoma que o jogador descreve.
+ *
+ * A saida NAO e cortar agente: e parar de deixar o custo crescer com N. O teto
+ * abaixo e por QUADRO e vale para os dois tipos; quem nao recebe ficha usa o
+ * ultimo resultado (todos os consumidores ja tem esse caminho, porque a
+ * percepcao ja funcionava assim). A ordem de atendimento e por IMPORTANCIA
+ * (perto e a vista primeiro), com giro por quadro para ninguem morrer de fome.
+ * ======================================================================== */
+
+/** Teto de raios da IA por quadro. Publico via `ai.tetoRaios`. */
+const TETO_RAIOS = 30;
+/** Raios que NUNCA sao negados: seguranca de corpo (drone dentro de parede). */
+const PRIO_SEGURANCA = 2;
+/** Distancia em que o agente e sempre tratado como importante. */
+const DIST_PERTO = 20;
+/** Alem disso a ARMA do hostil para de projetar sombra (o corpo nunca para). */
+const DIST_ARMA_SOMBRA = 16;
 
 /**
  * Audicao — alcance nominal por fonte, em metros.
@@ -106,6 +143,20 @@ export class AIManager {
     this.nav = null;
 
     this._ficha = 0;
+    /* Orcamento unificado de raios (ver o bloco de constantes). `tetoRaios` e
+     * publico: quem quiser afrouxar ou apertar mexe aqui, nao em cada agente. */
+    this.tetoRaios = TETO_RAIOS;
+    this._raios = 0;
+    this._raiosSeg = 0;
+    /** Estatistica do quadro anterior, para ferramenta e HUD de debug. */
+    this.raiosNoQuadro = 0;
+    this.raiosNegados = 0;
+    /* Frustum da camera do jogador, recalculado uma vez por quadro. Serve ao
+     * LOD: quem esta FORA da tela nao precisa da mesma taxa de quem esta nela.
+     * Nao cria renderer nem toca em material — so le a matriz da camera. */
+    this._frustum = new THREE.Frustum();
+    this._matFrustum = new THREE.Matrix4();
+    this._giro = 0;
     // Nao zero: com 0 a primeira onda dispara no primeiro frame de jogo,
     // antes de o jogador sequer se mover.
     this._tOnda = 4;
@@ -188,11 +239,28 @@ export class AIManager {
     if (!pos) return 0;
     const r2 = raio * raio;
     let n = 0;
-    for (const e of this.vivos) {
+    /* RAJADA. Isto e um raio de oclusao POR HOSTIL VIVO num unico quadro —
+     * medido em `tools/miolo.mjs`: p99 de 19 e MAXIMO de 24 raios num quadro so,
+     * a segunda maior fonte de raios do jogo depois do voo do drone. O
+     * estrangulamento de 0,12 s do `weapon:fire` limita a frequencia da rajada,
+     * nao o tamanho dela — e o tamanho cresce linear com o bando.
+     *
+     * A rajada agora sai do mesmo orcamento do quadro, com o giro em volta da
+     * lista para a mesma ponta nao ser sempre a atendida. Quem nao recebe ficha
+     * ainda ouve: o `Perception.ouvir` sem oclusao trata o som como se nao
+     * houvesse parede no caminho — ou seja, o hostil fica MAIS sensivel, nunca
+     * surdo. Degradar para "ouve demais" e o lado certo de errar num som que
+     * so leva a SUSPEITA (teto de 0,85 no passo). */
+    const N = this.vivos.length;
+    if (N === 0) return 0;
+    const inicio = this._giro % N;
+    for (let k = 0; k < N; k++) {
+      const e = this.vivos[(inicio + k) % N];
       if (!e.alive) continue;
       if (e.pos.distanceToSquared(pos) > r2) continue;
       e.posOlho(_ouvido);
-      if (e.percepcao.ouvir(pos, raio, forca, _ouvido, teto)) n++;
+      const comOclusao = this.pedirRaio((e._peso ?? 3) >= 3 ? 2 : 0);
+      if (e.percepcao.ouvir(pos, raio, forca, _ouvido, teto, comOclusao)) n++;
     }
     return n;
   }
@@ -747,6 +815,13 @@ export class AIManager {
 
     const jog = this.ctx.player?.position;
     this._ficha = FICHAS_LOS;
+    /* Os contadores fecham no FIM do `ai.update`, nao no comeco: `_ouviram` roda
+     * de dentro do `Player.update()` (chega por evento de `weapon:fire` e
+     * `player:footstep`), que corre ANTES da IA no laco do `main.js`. Zerar
+     * aqui deixaria a rajada de audicao fora de qualquer conta. */
+    this.raiosNoQuadro = this._raios + this._raiosSeg;
+    this._giro++;
+    this._marcarImportancia(jog);
     this.rotores?.comecar();
     let nDrones = 0, tensao = 0, maisPerto = Infinity;
     _enx.set(0, 0, 0);
@@ -770,7 +845,10 @@ export class AIManager {
       }
 
       // LOD: longe pensa a 5Hz. O ragdoll e a animacao seguem cheios.
-      const dist = jog ? e.pos.distanceTo(jog) : 0;
+      const dist = e._dist ?? (jog ? e.pos.distanceTo(jog) : 0);
+      /* Ritmo da pose do esqueleto e sombra da arma, pelo mesmo peso que rege o
+       * orcamento de raios. Ver `_marcarImportancia`. */
+      if (!e.eDrone) this._lodDoSoldado(e);
       let passo = dt;
       if (dist > DIST_LOD) {
         e._lento += dt;
@@ -788,6 +866,13 @@ export class AIManager {
         e._lento = 0;
       }
 
+      /* Ficha de linha de visada: SEM MUDANCA, de proposito.
+       *
+       * A tentativa de reservar fichas para quem tem peso >= 2 parecia gratis
+       * (o total continua sendo `FICHAS_LOS`), mas mexe em QUEM enxerga e quando,
+       * e isso e comportamento de combate, nao desempenho — o teto de 6 ja
+       * limitava o custo antes e continua limitando. Nao ha um ms a ganhar
+       * aqui, e ha jogo a perder. Fica como estava. */
       const temFicha = this._ficha > 0;
       if (temFicha) this._ficha--;
       e.update(passo, temFicha);
@@ -808,14 +893,162 @@ export class AIManager {
     // Ondas: repoe inimigos conforme o jogador limpa.
     if (this.spawnAutomatico && this.ctx.state === 'jogando') {
       this._tOnda -= dt;
-      const ativos = this.vivos.filter((e) => e.alive).length;
+      // Contagem sem `filter`: array novo por quadro, e este laco roda sempre.
+      let ativos = 0;
+      for (let i = 0; i < this.vivos.length; i++) if (this.vivos[i].alive) ativos++;
       if (ativos < 4 && this._tOnda <= 0) {
         this.spawnOnda(Math.min(4, this.maxVivos - ativos));
         this._tOnda = 8 + Math.random() * 6;
       }
     }
 
+    /* Fecha o quadro do orcamento. Ver a nota no topo do metodo. */
+    this._raios = 0;
+    this._raiosSeg = 0;
+    this.raiosNegados = 0;
+
     void elapsed;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* LOD e orcamento de raios                                            */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Uma passada por quadro que escreve, em cada agente vivo:
+   *
+   *   `e._dist`     distancia ao jogador
+   *   `e._naTela`   se a esfera dele intersecta o frustum da camera
+   *   `e._peso`     0..3 — quanto ele merece do quadro
+   *   `e._passo`    de quantos em quantos quadros ele pode gastar raio de luxo
+   *
+   * O criterio e distancia E visibilidade, nas duas pontas: um hostil a 8 m
+   * atras da sua cabeca continua importante (ele vai te matar), um a 45 m na
+   * sua frente continua importante (voce esta olhando para ele), e um a 45 m
+   * fora da tela nao e importante para nada. So a distancia erra os dois casos.
+   *
+   * Isto NAO reduz o bando: todo mundo continua vivo, pensando e atirando. O
+   * que muda e a TAXA de reamostragem do que e caro, e so para quem esta longe
+   * E fora da tela.
+   */
+  _marcarImportancia(jog) {
+    const cam = this.ctx.camera;
+    let temFrustum = false;
+    if (cam) {
+      cam.updateMatrixWorld();
+      this._matFrustum.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+      this._frustum.setFromProjectionMatrix(this._matFrustum);
+      temFrustum = true;
+    }
+    let nQuentes = 0;
+    for (let i = 0; i < this.vivos.length; i++) {
+      const e = this.vivos[i];
+      if (!e.alive) { e._peso = 0; continue; }
+      const d = jog ? e.pos.distanceTo(jog) : 0;
+      e._dist = d;
+      let naTela = true;
+      if (temFrustum) {
+        _dc.copy(e.pos);
+        if (!e.eDrone) _dc.y += ALTURA_CENTRO;
+        _esfera.center.copy(_dc);
+        _esfera.radius = e.eDrone ? 0.9 : RAIO_GROSSO;
+        naTela = this._frustum.intersectsSphere(_esfera);
+      }
+      e._naTela = naTela;
+      /* 3 = colado / 2 = perto ou na tela / 1 = longe mas na tela / 0 = longe e
+       * fora da tela. Quem esta em `ATIRAR`/`PAIRAR` nunca cai abaixo de 2:
+       * degradar a taxa de quem esta atirando em voce e o unico jeito de o LOD
+       * virar defeito de jogo. */
+      let p = 0;
+      if (d < DIST_PERTO) p = 3;
+      else if (naTela) p = d < DIST_LOD ? 2 : 1;
+      else p = d < DIST_LOD ? 1 : 0;
+      if (e.ocupaVagaDeFogo && p < 2) p = 2;
+      e._peso = p;
+      if (p >= 2) nQuentes++;
+      /* `_passo` rege so o que e CONFORTO (sonda rotativa do voo). Quem esta na
+       * tela ou a menos de 38 m sonda todo quadro; so o invisivel a distancia
+       * alterna. Foi medido: cortar mais que isso vira defeito de voo. */
+      e._passo = p >= 1 ? 1 : 2;
+      e._minhaVez = ((this._giro + (e.id | 0)) % e._passo) === 0;
+    }
+    this._quentes = nQuentes;
+  }
+
+  /**
+   * LOD de DESENHO e de animacao do hostil de chao.
+   *
+   * MEDIDO (`tools/miolo.mjs`, regressao sobre 16 180 quadros):
+   *
+   *   render = 4,58 ms + **0,282 ms por hostil de chao** + 0,091 ms por drone
+   *
+   * O hostil de chao custa 2,9x o drone no `engine.render`, e mais no `render`
+   * do que no `ai.update` inteiro (0,282 contra ~0,09). A causa e estrutural e
+   * mora aqui: cada `Soldier` sao DOIS objetos de desenho (corpo com skinning +
+   * arma), os dois com `castShadow` e — ate agora — `frustumCulled = false`.
+   * Com 4 cascatas de sombra isso da **10 submissoes de desenho por hostil por
+   * quadro, sem culling nenhum, mesmo com ele atras da camera**.
+   *
+   * Duas alavancas, nesta ordem de seguranca:
+   *
+   * 1. **Culling de verdade** (feito no `Soldier`/`Drone`, com esfera
+   *    envolvente escrita a mao). Nao custa qualidade nenhuma: o objeto so
+   *    deixa de ser submetido quando esta comprovadamente fora do volume.
+   * 2. **Sombra da ARMA some alem de `DIST_ARMA_SOMBRA`.** Sao 4 desenhos de
+   *    cascata por hostil. O QUE SE PERDE: a sombra propria do fuzil a mais de
+   *    16 m — uma faixa de 1 a 3 texels que cai quase sempre dentro da sombra
+   *    do proprio corpo. A sombra do CORPO nunca e desligada, em distancia
+   *    nenhuma: e ela que da contato com o chao, e sem contato tudo flutua
+   *    (CRITICA.md, criterio 2).
+   *
+   * E a animacao: `Soldier.update` custa 0,70 ms de p50 com 14 em campo (metade
+   * do `ai.update` inteiro). Quem esta longe E fora da tela resolve a pose a
+   * cada 3 quadros (20 Hz) em vez de 60, com o `dt` somado — a fase do ciclo de
+   * passo continua correta, so a reamostragem cai. Quem esta na tela, perto ou
+   * atirando resolve todo quadro, como antes.
+   */
+  _lodDoSoldado(e) {
+    const s = e.soldado;
+    if (!s) return;
+    const p = e._peso ?? 3;
+    s.ritmoPose = p >= 2 ? 1 : (p === 1 ? 2 : 3);
+    const sombraArma = (e._dist ?? 0) < DIST_ARMA_SOMBRA;
+    if (s.arma && s.arma.castShadow !== sombraArma) s.arma.castShadow = sombraArma;
+  }
+
+  /**
+   * Ficha de raio do quadro.
+   *
+   * @param {number} prio 0 conforto · 1 normal · 2 SEGURANCA (nunca negada)
+   * @returns {boolean} se pode atirar o raio
+   *
+   * Prioridade 2 existe para um caso so, e ele foi caro de resolver: a
+   * depenetracao do drone (`sphereCast` com `maxDist 0`). Sem ela o drone
+   * QUASE PARADO encostado num muro termina o quadro com o corpo dentro da
+   * parede, e isso fica na tela — ao contrario de um clipe de passagem
+   * (ver NOTES [AI] secao 3: foi a depenetracao que levou as amostras
+   * penetrando de 20 para 1-2 em 900). Nenhum orcamento pode negar isso.
+   */
+  pedirRaio(prio = 1) {
+    /* Raio de SEGURANCA nao consome o teto — ele tem contador proprio.
+     *
+     * MEDIDO NA MARRA: na primeira versao ele consumia, e o resultado foi uma
+     * regressao de comportamento, nao de desempenho. Os raios de seguranca do
+     * voo (varredura + depenetracao) sao gastos DENTRO do `e.update()` de cada
+     * agente; com 10 drones eles enchiam o teto de 30 antes de a metade da
+     * lista pedir ficha de linha de visada, e o `tools/drone.mjs` acusou
+     * **9 de 14 drones "NUNCA viu o jogador"** e **zero janelas de tiro em 90 s**
+     * com 10 drones parados em `alerta`. Um orcamento que faz o inimigo ficar
+     * cego nao e orcamento, e defeito.
+     *
+     * A conta certa: o teto limita o que e DISCRICIONARIO (conforto de voo,
+     * sonda de chao de quem esta longe, oclusao de som de quem esta longe). O
+     * que e seguranca de corpo e o que e linha de visada tem reserva propria e
+     * limite proprio — a linha de visada sempre teve (`FICHAS_LOS`). */
+    if (prio >= PRIO_SEGURANCA) { this._raiosSeg++; return true; }
+    if (this._raios >= this.tetoRaios) { this.raiosNegados++; return false; }
+    this._raios++;
+    return true;
   }
 
   /**

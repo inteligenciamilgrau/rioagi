@@ -1,0 +1,1192 @@
+{
+ "testados": 2520,
+ "motivos": {
+  "aresta baixa (<=0,175) e mesmo assim travou": 861,
+  "sonda de chao nao acha patamar": 19,
+  "PAREDE / degrau alto de verdade (> 0.45 m)": 1476,
+  "nao cabe em pe no ponto elevado": 93,
+  "aresta 0,175..0,45 com patamar bom — DEFEITO": 71
+ },
+ "casos": [
+  {
+   "x": 31.2,
+   "z": -70.93,
+   "y": 34.315,
+   "sobe": 0.233,
+   "dFrente": 0.35,
+   "supFrente": "concreto",
+   "nyFrente": 0.8,
+   "supAqui": "terra",
+   "topoBloqueio": 0.15,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 34.312,
+   "limiteAceito": 34.785,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 34.315
+    }
+   ],
+   "deps": [
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": 1
+  },
+  {
+   "x": 89.75,
+   "z": -71.25,
+   "y": 32.195,
+   "sobe": 0.177,
+   "dFrente": 0.6,
+   "supFrente": "terra",
+   "nyFrente": 0.95,
+   "supAqui": "terra",
+   "topoBloqueio": 1.7,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 32.201,
+   "limiteAceito": 32.665,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 32.195
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": -1,
+   "dz": 0
+  },
+  {
+   "x": 56.23,
+   "z": -67.52,
+   "y": 33.018,
+   "sobe": 0.346,
+   "dFrente": 0.35,
+   "supFrente": "concreto",
+   "nyFrente": 0.92,
+   "supAqui": "terra",
+   "topoBloqueio": 0.15,
+   "baseBloqueio": 0.15,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": false,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 33.009,
+   "limiteAceito": 33.488,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 33.018
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": 1
+  },
+  {
+   "x": -1.31,
+   "z": -65.73,
+   "y": 31.898,
+   "sobe": 0.324,
+   "dFrente": 0.4,
+   "supFrente": "concreto",
+   "nyFrente": 0.91,
+   "supAqui": "terra",
+   "topoBloqueio": 0.25,
+   "baseBloqueio": 0.15,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.892,
+   "limiteAceito": 32.368,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.898
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": 1
+  },
+  {
+   "x": 3.69,
+   "z": -67.2,
+   "y": 31.884,
+   "sobe": 0.262,
+   "dFrente": 0.4,
+   "supFrente": "concreto",
+   "nyFrente": 0.9,
+   "supAqui": "terra",
+   "topoBloqueio": 0.15,
+   "baseBloqueio": 0.15,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": false,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.881,
+   "limiteAceito": 32.354,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.884
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": 1
+  },
+  {
+   "x": -26.22,
+   "z": -63.49,
+   "y": 32.717,
+   "sobe": 0.25,
+   "dFrente": 0.35,
+   "supFrente": "concreto",
+   "nyFrente": 0.92,
+   "supAqui": "terra",
+   "topoBloqueio": 0.15,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 32.713,
+   "limiteAceito": 33.187,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 32.717
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": 1
+  },
+  {
+   "x": -11.3,
+   "z": -63.6,
+   "y": 31.787,
+   "sobe": 0.254,
+   "dFrente": 0.35,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "terra",
+   "topoBloqueio": 0.15,
+   "baseBloqueio": 0.15,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": false,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.784,
+   "limiteAceito": 32.257,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.787
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": 1
+  },
+  {
+   "x": 81.34,
+   "z": -63.21,
+   "y": 31.287,
+   "sobe": 0.232,
+   "dFrente": 0.4,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "concreto",
+   "topoBloqueio": 0.35,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.287,
+   "limiteAceito": 31.757,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.287
+    }
+   ],
+   "deps": [
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": -34.71,
+   "z": -56.27,
+   "y": 31.875,
+   "sobe": 0.398,
+   "dFrente": 0.6,
+   "supFrente": "concreto",
+   "nyFrente": 0.98,
+   "supAqui": "terra",
+   "topoBloqueio": null,
+   "baseBloqueio": null,
+   "supBloqueio": null,
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.88,
+   "limiteAceito": 32.345,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.875
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 1,
+   "dz": 0
+  },
+  {
+   "x": -34.71,
+   "z": -56.27,
+   "y": 31.876,
+   "sobe": 0.398,
+   "dFrente": 0.6,
+   "supFrente": "concreto",
+   "nyFrente": 0.98,
+   "supAqui": "terra",
+   "topoBloqueio": null,
+   "baseBloqueio": null,
+   "supBloqueio": null,
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.88,
+   "limiteAceito": 32.346,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.876
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 1,
+   "dz": 0
+  },
+  {
+   "x": 48.51,
+   "z": -53.69,
+   "y": 29.835,
+   "sobe": 0.307,
+   "dFrente": 0.35,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "terra",
+   "topoBloqueio": 0.15,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 29.839,
+   "limiteAceito": 30.305,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 29.835
+    }
+   ],
+   "deps": [
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 1,
+   "dz": 0
+  },
+  {
+   "x": 6.35,
+   "z": -42.77,
+   "y": 26.855,
+   "sobe": 0.399,
+   "dFrente": 0.4,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "concreto",
+   "topoBloqueio": 0.35,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 26.855,
+   "limiteAceito": 27.325,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 26.855
+    }
+   ],
+   "deps": [
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 77.56,
+   "z": -38.76,
+   "y": 25.479,
+   "sobe": 0.399,
+   "dFrente": 0.35,
+   "supFrente": "tijolo",
+   "nyFrente": 1,
+   "supAqui": "asfalto",
+   "topoBloqueio": 0.25,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "tijolo",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 25.479,
+   "limiteAceito": 25.949,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 25.479
+    }
+   ],
+   "deps": [
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 1,
+   "dz": 0
+  },
+  {
+   "x": 56.3,
+   "z": -34.59,
+   "y": 24.487,
+   "sobe": 0.409,
+   "dFrente": 0.6,
+   "supFrente": "terra",
+   "nyFrente": 0.8,
+   "supAqui": "terra",
+   "topoBloqueio": 0.05,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "terra",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 24.493,
+   "limiteAceito": 24.957,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 24.487
+    }
+   ],
+   "deps": [
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 71.33,
+   "z": -33.1,
+   "y": 24.131,
+   "sobe": 0.308,
+   "dFrente": 0.4,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "concreto",
+   "topoBloqueio": 0.25,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 24.126,
+   "limiteAceito": 24.601,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 24.131
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": 1
+  },
+  {
+   "x": 69,
+   "z": -31.31,
+   "y": 23.641,
+   "sobe": 0.368,
+   "dFrente": 0.4,
+   "supFrente": "concreto",
+   "nyFrente": 0.89,
+   "supAqui": "terra",
+   "topoBloqueio": 0.25,
+   "baseBloqueio": 0.15,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 23.638,
+   "limiteAceito": 24.111,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 23.641
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 1,
+   "dz": 0
+  },
+  {
+   "x": -73.82,
+   "z": -28.75,
+   "y": 37.092,
+   "sobe": 0.444,
+   "dFrente": 0.6,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "concreto",
+   "topoBloqueio": 0.35,
+   "baseBloqueio": 0.35,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": false,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 37.092,
+   "limiteAceito": 37.562,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 37.092
+    }
+   ],
+   "deps": [
+    5
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 1,
+   "dz": 0
+  },
+  {
+   "x": -11.19,
+   "z": -28.77,
+   "y": 25.139,
+   "sobe": 0.288,
+   "dFrente": 0.35,
+   "supFrente": "concreto",
+   "nyFrente": 0.81,
+   "supAqui": "terra",
+   "topoBloqueio": 0.15,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 25.136,
+   "limiteAceito": 25.609,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 25.139
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": 1
+  },
+  {
+   "x": 16.24,
+   "z": -28.72,
+   "y": 24.189,
+   "sobe": 0.222,
+   "dFrente": 0.35,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "concreto",
+   "topoBloqueio": 0.15,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 24.188,
+   "limiteAceito": 24.659,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 24.189
+    }
+   ],
+   "deps": [
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 1,
+   "dz": 0
+  },
+  {
+   "x": 26.31,
+   "z": -28.71,
+   "y": 23.753,
+   "sobe": 0.211,
+   "dFrente": 0.4,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "concreto",
+   "topoBloqueio": 0.15,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 23.751,
+   "limiteAceito": 24.223,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 23.753
+    }
+   ],
+   "deps": [
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 1,
+   "dz": 0
+  },
+  {
+   "x": 28.37,
+   "z": -28.79,
+   "y": 23.608,
+   "sobe": 0.356,
+   "dFrente": 0.4,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "concreto",
+   "topoBloqueio": 0.25,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 23.61,
+   "limiteAceito": 24.078,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 23.608
+    }
+   ],
+   "deps": [
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": -1,
+   "dz": 0
+  },
+  {
+   "x": -51.27,
+   "z": -25.34,
+   "y": 27.957,
+   "sobe": 0.356,
+   "dFrente": 0.35,
+   "supFrente": "concreto",
+   "nyFrente": 0.95,
+   "supAqui": "terra",
+   "topoBloqueio": 0.25,
+   "baseBloqueio": 0.15,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 27.947,
+   "limiteAceito": 28.427,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 27.957
+    }
+   ],
+   "deps": [
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": 1
+  },
+  {
+   "x": -32.85,
+   "z": -26.13,
+   "y": 27.742,
+   "sobe": 0.211,
+   "dFrente": 0.6,
+   "supFrente": "concreto",
+   "nyFrente": 0.95,
+   "supAqui": "concreto",
+   "topoBloqueio": null,
+   "baseBloqueio": null,
+   "supBloqueio": null,
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 27.75,
+   "limiteAceito": 28.212,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 27.742
+    }
+   ],
+   "deps": [
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": -1,
+   "dz": 0
+  },
+  {
+   "x": -18.79,
+   "z": -25.85,
+   "y": 25.264,
+   "sobe": 0.439,
+   "dFrente": 0.4,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "asfalto",
+   "topoBloqueio": 0.55,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 25.264,
+   "limiteAceito": 25.734,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 25.264
+    }
+   ],
+   "deps": [
+    3
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": -47.03,
+   "z": -23.7,
+   "y": 27.085,
+   "sobe": 0.285,
+   "dFrente": 0.4,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "asfalto",
+   "topoBloqueio": 0.25,
+   "baseBloqueio": 0.05,
+   "supBloqueio": "concreto",
+   "ladoBloqueio": true,
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 27.087,
+   "limiteAceito": 27.555,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 27.085
+    }
+   ],
+   "deps": [
+    3
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 1,
+   "dz": 0
+  }
+ ],
+ "baixaPorTopo": {
+  "bloqueio ate 1,4 m ou mais (parede/poste)": 780,
+  "nada barra na linha do eixo": 55,
+  "bloqueio so ate 0,35 m (aresta mesmo)": 22,
+  "bloqueio ate 0,55..0,90 m (muro baixo, carro)": 4
+ },
+ "baixaExemplos": [
+  {
+   "x": -89.75,
+   "z": -88.75,
+   "sobe": -0.008,
+   "topo": 1.7,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 1,4 m ou mais (parede/poste)"
+  },
+  {
+   "x": -89.05,
+   "z": -88.75,
+   "sobe": 0.033,
+   "topo": 1.7,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 1,4 m ou mais (parede/poste)"
+  },
+  {
+   "x": -88.75,
+   "z": -89.75,
+   "sobe": 0.029,
+   "topo": 1.7,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 1,4 m ou mais (parede/poste)"
+  },
+  {
+   "x": -88.75,
+   "z": -89.05,
+   "sobe": -0.007,
+   "topo": 1.7,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 1,4 m ou mais (parede/poste)"
+  },
+  {
+   "x": -86.25,
+   "z": -89.75,
+   "sobe": 0.027,
+   "topo": 1.7,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 1,4 m ou mais (parede/poste)"
+  },
+  {
+   "x": -86.25,
+   "z": -89.05,
+   "sobe": -0.007,
+   "topo": 1.7,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 1,4 m ou mais (parede/poste)"
+  },
+  {
+   "x": -83.75,
+   "z": -89.75,
+   "sobe": 0.002,
+   "topo": 1.7,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 1,4 m ou mais (parede/poste)"
+  },
+  {
+   "x": -83.75,
+   "z": -89.05,
+   "sobe": -0.001,
+   "topo": 1.7,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 1,4 m ou mais (parede/poste)"
+  },
+  {
+   "x": -81.25,
+   "z": -89.75,
+   "sobe": 0.013,
+   "topo": 1.7,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 1,4 m ou mais (parede/poste)"
+  },
+  {
+   "x": -81.25,
+   "z": -89.05,
+   "sobe": 0.005,
+   "topo": 1.7,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 1,4 m ou mais (parede/poste)"
+  },
+  {
+   "x": -6.31,
+   "z": -78.94,
+   "sobe": -0.001,
+   "topo": null,
+   "base": null,
+   "sup": null,
+   "lado": true,
+   "rot": "nada barra na linha do eixo"
+  },
+  {
+   "x": -4.11,
+   "z": -78.67,
+   "sobe": 0,
+   "topo": null,
+   "base": null,
+   "sup": null,
+   "lado": true,
+   "rot": "nada barra na linha do eixo"
+  },
+  {
+   "x": 67.43,
+   "z": -78.82,
+   "sobe": -0.015,
+   "topo": null,
+   "base": null,
+   "sup": null,
+   "lado": true,
+   "rot": "nada barra na linha do eixo"
+  },
+  {
+   "x": 68.37,
+   "z": -78.77,
+   "sobe": 0.021,
+   "topo": null,
+   "base": null,
+   "sup": null,
+   "lado": true,
+   "rot": "nada barra na linha do eixo"
+  },
+  {
+   "x": 23.39,
+   "z": -76.25,
+   "sobe": 0,
+   "topo": null,
+   "base": null,
+   "sup": null,
+   "lado": false,
+   "rot": "nada barra na linha do eixo"
+  },
+  {
+   "x": 26.63,
+   "z": -76.22,
+   "sobe": 0,
+   "topo": null,
+   "base": null,
+   "sup": null,
+   "lado": false,
+   "rot": "nada barra na linha do eixo"
+  },
+  {
+   "x": 10.77,
+   "z": -66.2,
+   "sobe": -0.036,
+   "topo": null,
+   "base": null,
+   "sup": null,
+   "lado": true,
+   "rot": "nada barra na linha do eixo"
+  },
+  {
+   "x": 15.09,
+   "z": -66.18,
+   "sobe": -0.005,
+   "topo": null,
+   "base": null,
+   "sup": null,
+   "lado": false,
+   "rot": "nada barra na linha do eixo"
+  },
+  {
+   "x": 43.81,
+   "z": -66.67,
+   "sobe": 0.01,
+   "topo": 0.35,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio so ate 0,35 m (aresta mesmo)"
+  },
+  {
+   "x": 28.72,
+   "z": -62.87,
+   "sobe": 0.094,
+   "topo": 0.05,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio so ate 0,35 m (aresta mesmo)"
+  },
+  {
+   "x": 78.09,
+   "z": -63.85,
+   "sobe": 0,
+   "topo": null,
+   "base": null,
+   "sup": null,
+   "lado": false,
+   "rot": "nada barra na linha do eixo"
+  },
+  {
+   "x": 28.74,
+   "z": -61.9,
+   "sobe": 0.087,
+   "topo": null,
+   "base": null,
+   "sup": null,
+   "lado": true,
+   "rot": "nada barra na linha do eixo"
+  },
+  {
+   "x": 45.54,
+   "z": -61.31,
+   "sobe": 0.069,
+   "topo": 0.15,
+   "base": 0.15,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio so ate 0,35 m (aresta mesmo)"
+  },
+  {
+   "x": -28.54,
+   "z": -54.4,
+   "sobe": 0,
+   "topo": 0.05,
+   "base": 0.05,
+   "sup": "terra",
+   "lado": true,
+   "rot": "bloqueio so ate 0,35 m (aresta mesmo)"
+  },
+  {
+   "x": 41.27,
+   "z": -46.22,
+   "sobe": 0,
+   "topo": 0.15,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": false,
+   "rot": "bloqueio so ate 0,35 m (aresta mesmo)"
+  },
+  {
+   "x": -71.17,
+   "z": -43.91,
+   "sobe": 0,
+   "topo": 0.05,
+   "base": 0.05,
+   "sup": "terra",
+   "lado": false,
+   "rot": "bloqueio so ate 0,35 m (aresta mesmo)"
+  },
+  {
+   "x": -25.34,
+   "z": -43.68,
+   "sobe": 0.098,
+   "topo": 0.05,
+   "base": 0.05,
+   "sup": "terra",
+   "lado": true,
+   "rot": "bloqueio so ate 0,35 m (aresta mesmo)"
+  },
+  {
+   "x": -25.34,
+   "z": -43.68,
+   "sobe": 0.098,
+   "topo": 0.05,
+   "base": 0.05,
+   "sup": "terra",
+   "lado": true,
+   "rot": "bloqueio so ate 0,35 m (aresta mesmo)"
+  },
+  {
+   "x": 26.77,
+   "z": -13.68,
+   "sobe": 0,
+   "topo": 0.05,
+   "base": 0.05,
+   "sup": "terra",
+   "lado": true,
+   "rot": "bloqueio so ate 0,35 m (aresta mesmo)"
+  },
+  {
+   "x": 1.22,
+   "z": -11.4,
+   "sobe": 0.109,
+   "topo": 0.05,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": false,
+   "rot": "bloqueio so ate 0,35 m (aresta mesmo)"
+  },
+  {
+   "x": 21.2,
+   "z": -7.85,
+   "sobe": 0,
+   "topo": 0.9,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 0,55..0,90 m (muro baixo, carro)"
+  },
+  {
+   "x": 58.82,
+   "z": -4.56,
+   "sobe": 0,
+   "topo": 0.55,
+   "base": 0.05,
+   "sup": "terra",
+   "lado": true,
+   "rot": "bloqueio ate 0,55..0,90 m (muro baixo, carro)"
+  },
+  {
+   "x": 71.36,
+   "z": 13.78,
+   "sobe": 0,
+   "topo": 0.9,
+   "base": 0.05,
+   "sup": "tijolo",
+   "lado": true,
+   "rot": "bloqueio ate 0,55..0,90 m (muro baixo, carro)"
+  },
+  {
+   "x": 42.86,
+   "z": 18.66,
+   "sobe": 0,
+   "topo": 0.55,
+   "base": 0.05,
+   "sup": "concreto",
+   "lado": true,
+   "rot": "bloqueio ate 0,55..0,90 m (muro baixo, carro)"
+  }
+ ],
+ "salto": {
+  "pior": 0.769,
+  "x": 44.6,
+  "z": 58.53
+ },
+ "trisColisao": 94360,
+ "trisTerrenoCol": 16200
+}

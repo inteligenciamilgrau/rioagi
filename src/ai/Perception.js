@@ -193,7 +193,7 @@ export class Perception {
    *
    * @returns {boolean} se o som foi de fato percebido
    */
-  ouvir(posicao, raio, forca = 1.0, olho = null, teto = 1.25) {
+  ouvir(posicao, raio, forca = 1.0, olho = null, teto = 1.25, comOclusao = true) {
     const p = olho || this.ultimaPos;
     const dx = posicao.x - p.x, dy = posicao.y - p.y, dz = posicao.z - p.z;
     let dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -201,7 +201,12 @@ export class Perception {
 
     let atenuacao = 1;
     const col = this.ctx?.world?.collision;
-    if (col && col.raycast && dist > 1.2) {
+    /* `comOclusao = false` chega do orcamento de raios do `AIManager`: um som
+     * distribuido para 24 hostis dispara 24 raycasts no mesmo quadro. Sem a
+     * sondagem o som passa como se nao houvesse parede — o hostil fica mais
+     * sensivel, NUNCA surdo. Errar para o lado de "ouviu demais" e o certo aqui:
+     * som sozinho nao atira, ele leva a SUSPEITA (teto de 0,85 no passo). */
+    if (comOclusao && col && col.raycast && dist > 1.2) {
       _dir.set(dx / dist, dy / dist, dz / dist).negate();
       const r = col.raycast(posicao, _dir, dist - 0.3);
       this.dono?.contarRaio?.();

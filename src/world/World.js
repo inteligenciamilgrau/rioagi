@@ -53,6 +53,18 @@ function suave01(t) {
 }
 
 export class World {
+  /**
+   * Metros por triangulo da malha de COLISAO do terreno. A malha VISUAL e de
+   * 1 m; com 2 m aqui, colisao e desenho discordam de 0,25 a 0,75 m em 3 363
+   * das 85 258 celulas andaveis (medido em `tools/piso.mjs`).
+   *
+   * E knob estatico, e nao constante, porque `tools/custochao.mjs` gera o mundo
+   * duas vezes no MESMO processo para medir os dois valores lado a lado — entre
+   * duas execucoes o quadro medio desta maquina varia de 6 a 25 ms e a
+   * comparacao nao vale nada. Nao mexa nisso em runtime fora de ferramenta.
+   */
+  static DEC_COLISAO_TERRENO = 2;
+
   constructor(ctx, opts = {}) {
     this.ctx = ctx;
     this.seed = opts.seed ?? SEED_PADRAO;
@@ -257,6 +269,7 @@ export class World {
     mat.color.setRGB(1, 1, 1);
     this._matTerreno = mat;
     this._trisTerreno = 0;
+    this._trisTerrenoCol = 0;
     this._misturarCapim(mat, matBase, matCapim);
 
     // Contrato de UV: metros de mundo * escalaUV. Sem isto o ladrilho nao tem o
@@ -409,7 +422,7 @@ export class World {
 
   _colisaoTerreno(i0, j0, tam, passo) {
     const hf = this.terrain;
-    const dec = 2;                                     // 1 triangulo de colisao a cada 2 m
+    const dec = World.DEC_COLISAO_TERRENO;             // metros por triangulo de colisao
     const P = (i, j) => {
       const x = -this.size / 2 + i * passo;
       const z = -this.size / 2 + j * passo;
@@ -424,6 +437,7 @@ export class World {
       }
     }
     this.collision.addRaw(arr.subarray(0, o), 'terra');
+    this._trisTerrenoCol += o / 9;
   }
 
   _saiaTerreno() {

@@ -148,6 +148,11 @@ class Game {
      * jogo nunca usa. Ver src/core/Aquecimento.js — mede-se com tools/pico.mjs. */
     progress('Compilando shaders', 0.99);
     ctx.debug.aquecimento = await aquecerCena(ctx);
+    /* Mesma ideia, para o audio: o cache de forma de onda de cada som so e
+     * assado no primeiro uso, e a montagem roda sincrona na thread principal.
+     * Medido em tools/miolo.mjs aparecendo nos piores quadros de `ai.update`
+     * como `aud.tiro 11,12 ms` e `aud.impacto 9,70 ms`. Aqui ninguem sente. */
+    ctx.debug.aquecimentoAudio = await ctx.audio?.aquecerCaches?.();
 
     progress('Pronto', 1.0);
     ctx.bus.emit('boot:done', {});

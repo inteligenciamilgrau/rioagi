@@ -1,0 +1,172 @@
+{
+ "varredura": {
+  "andaveis": 85258,
+  "celulas": 129600,
+  "cel": 0.5,
+  "falhas": 1467,
+  "graves": 0,
+  "grupos": [],
+  "gruposAviso": [
+   {
+    "n": 24,
+    "tipo": "saliente",
+    "cx": -45.7,
+    "cz": 87.3,
+    "area": 6,
+    "h": -0.15,
+    "y": 12.17,
+    "ny": 1
+   },
+   {
+    "n": 22,
+    "tipo": "saliente",
+    "cx": -21.5,
+    "cz": -46.8,
+    "area": 5.5,
+    "h": 30.61,
+    "y": 32.53,
+    "ny": 1
+   },
+   {
+    "n": 21,
+    "tipo": "saliente",
+    "cx": 2.8,
+    "cz": 27.8,
+    "area": 5.3,
+    "h": 8.44,
+    "y": 10.04,
+    "ny": 1
+   },
+   {
+    "n": 20,
+    "tipo": "saliente",
+    "cx": 13,
+    "cz": -24.8,
+    "area": 5,
+    "h": 22.55,
+    "y": 23.83,
+    "ny": 1
+   },
+   {
+    "n": 19,
+    "tipo": "saliente",
+    "cx": -25.3,
+    "cz": -56.9,
+    "area": 4.8,
+    "h": 32.27,
+    "y": 36.35,
+    "ny": 1
+   },
+   {
+    "n": 19,
+    "tipo": "saliente",
+    "cx": -67.8,
+    "cz": 79.8,
+    "area": 4.8,
+    "h": 0.97,
+    "y": 4.82,
+    "ny": 1
+   },
+   {
+    "n": 18,
+    "tipo": "saliente",
+    "cx": 68.2,
+    "cz": 67.7,
+    "area": 4.5,
+    "h": -2.75,
+    "y": -0.23,
+    "ny": 1
+   },
+   {
+    "n": 17,
+    "tipo": "saliente",
+    "cx": -52.8,
+    "cz": 37.1,
+    "area": 4.3,
+    "h": 9.76,
+    "y": 18.84,
+    "ny": 1
+   }
+  ],
+  "porTipo": {
+   "saliente": 1168,
+   "semapoio": 299
+  },
+  "difMedia": 0.976,
+  "maxDif": 14.61,
+  "maxDifEm": [
+   -63.8,
+   -3.8
+  ],
+  "hist": {
+   "<-0.75": 5,
+   "-0.75..-0.25": 691,
+   "-0.25..0.25": 69355,
+   "0.25..0.75": 3363,
+   ">0.75": 11844
+  },
+  "tunel": {
+   "amostras": 1765,
+   "vazou": 0,
+   "piorCaso": []
+  },
+  "cotaMin": -3.371973752975464,
+  "cotaMax": 35.72172546386719,
+  "size": 180,
+  "trisColisao": 94360
+ },
+ "rastro": [
+  {
+   "rumo": "norte (-Z)",
+   "largadaX": 0,
+   "largadaZ": -78,
+   "cotaLargada": 32.4,
+   "menorY": 32.4,
+   "fim": {
+    "x": 0,
+    "z": -89,
+    "y": 32.8
+   },
+   "evento": null
+  },
+  {
+   "rumo": "sul   (+Z)",
+   "largadaX": 0,
+   "largadaZ": 78,
+   "cotaLargada": -0.8,
+   "menorY": 2.2,
+   "fim": {
+    "x": 1.1,
+    "z": 85.3,
+    "y": 2.2
+   },
+   "evento": null
+  },
+  {
+   "rumo": "oeste (-X)",
+   "largadaX": -78,
+   "largadaZ": 0,
+   "cotaLargada": 21.6,
+   "menorY": 21.7,
+   "fim": {
+    "x": -89,
+    "z": 0,
+    "y": 22.6
+   },
+   "evento": null
+  },
+  {
+   "rumo": "leste (+X)",
+   "largadaX": 78,
+   "largadaZ": 0,
+   "cotaLargada": 12.8,
+   "menorY": 11.8,
+   "fim": {
+    "x": 89,
+    "z": -2,
+    "y": 12.4
+   },
+   "evento": null
+  }
+ ]
+}

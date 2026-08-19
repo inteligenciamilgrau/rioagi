@@ -46,6 +46,7 @@ const _push = new THREE.Vector3();
 const _tmpA = new THREE.Vector3(), _tmpB = new THREE.Vector3();
 const _pos = new THREE.Vector3(), _delta = new THREE.Vector3();
 const _posAlt = new THREE.Vector3();
+const _posDesc = new THREE.Vector3();
 const _normalAcc = new THREE.Vector3();
 const _hitPt = new THREE.Vector3();
 const _closest = { point: new THREE.Vector3(), distance: 0, faceIndex: 0 };
@@ -438,6 +439,61 @@ export class Collision {
   }
 
   /**
+   * Desce a capsula de `deY` ate `ateY` e para no Y mais BAIXO em que ela ainda
+   * CABE (busca binaria sobre `_depenetrate`).
+   *
+   * Existe porque pousar o degrau em `_sondaChao` + `_depenetrate` DESFAZ o
+   * avanco horizontal do quadro. Os 5 raios da sonda alcancam `radius*0.62` =
+   * 21,7 cm a frente do eixo, e diante de um meio-fio de 18 a 25 cm a capsula
+   * fica parada a ~31 cm da face (raio 0,35 mordido pela aresta). A sonda entao
+   * so enxerga o chao BAIXO, o corpo e recolocado la, penetra a aresta de novo e
+   * a depenetracao o empurra para tras — o avanco do quadro morre e o quadro
+   * seguinte repete tudo. Descendo por busca, o corpo para APOIADO na aresta,
+   * alguns centimetros acima do chao, e o avanco sobrevive.
+   *
+   * @returns {number} o Y em que parou (nunca abaixo de `ateY`).
+   */
+  _pousar(pos, radius, height, deY, ateY) {
+    _posDesc.set(pos.x, ateY, pos.z);
+    if (this._depenetrate(_posDesc, radius, height, _push) === 0) { pos.y = ateY; return ateY; }
+    let bloqueado = ateY, livre = deY;
+    for (let i = 0; i < 6; i++) {
+      const meio = (bloqueado + livre) * 0.5;
+      _posDesc.set(pos.x, meio, pos.z);
+      if (this._depenetrate(_posDesc, radius, height, _push) === 0) livre = meio; else bloqueado = meio;
+    }
+    pos.y = livre;
+    return livre;
+  }
+
+  /**
+   * O corpo que acabou de subir o degrau esta APOIADO — e o que o apoia cabe
+   * dentro do limite de subida?
+   *
+   * Duas perguntas numa so. A sonda comum responde a primeira ("ha chao logo sob
+   * os pes"). Quando o corpo para em cima da ARESTA, sustentado pela esfera com
+   * o chao 10 a 30 cm abaixo, a sonda nao ve nada, e quem responde e um raio
+   * lancado `radius + 0,10` a frente, na direcao da marcha: ele acha o TOPO do
+   * que esta segurando o pe.
+   *
+   * A segunda pergunta e o que impede o degrau de virar escalada. Encostar num
+   * muro de 0,60 m tambem deixa a capsula pousada na aresta, 45 cm acima do
+   * chao; sem conferir que esse topo cabe em `tetoY`, o jogador subiria muro.
+   *
+   * Grava chao/normal/superficie em `res` nos dois caminhos.
+   */
+  _degrauApoiado(pos, radius, dirX, dirZ, tetoY, res) {
+    if (this._sondaChao(pos, radius, 0.24, res) && pos.y - res.y < 0.10) return true;
+    _tmpA.set(pos.x + dirX * (radius + 0.10), pos.y + radius + 0.02, pos.z + dirZ * (radius + 0.10));
+    _tmpB.set(0, -1, 0);
+    const h = this.raycast(_tmpA, _tmpB, radius + 0.32);
+    if (!h.hit || h.normal.y < CHAO_PISAVEL_Y) return false;
+    if (h.point.y > tetoY || h.point.y < pos.y - radius) return false;
+    res.y = h.point.y; res.normal.copy(h.normal); res.surface = h.surface;
+    return true;
+  }
+
+  /**
    * Move uma capsula de `start` para `end` com deslizamento em parede e degrau
    * automatico ate `stepHeight`.
    * @param {THREE.Vector3} start posicao dos PES no inicio
@@ -488,8 +544,24 @@ export class Collision {
 
     // --- degrau automatico: bloqueou no plano? tenta de novo por cima ---
     const pedidoH = Math.hypot(end.x - start.x, end.z - start.z);
+    /* Subindo (pulo, mantle) o degrau automatico nao entra: ele POUSA o corpo, e
+     * pousar no meio de um pulo cancela o pulo. Quem resolve borda no ar e o
+     * mantle do PLAYER. Esta guarda ja existia na sonda final; faltava aqui. */
+    const subindo = (end.y - start.y) > 1e-4;
     const obtidoH = Math.hypot(A.pos.x - start.x, A.pos.z - start.z);
-    if (stepHeight > 0 && pedidoH > 0.02 && obtidoH < pedidoH * 0.85) {
+    /* O piso do pedido era 0,02 m, e ele era a TRAVA, nao a guarda.
+     *
+     * `Movement` zera a velocidade planar em todo quadro em que a varredura nao
+     * entrega o deslocamento inteiro. No quadro seguinte o pedido volta a ser
+     * `groundAccel * walk * dt^2` = 11,0 * 4,3 / 3600 = **1,31 cm** — abaixo dos
+     * 2 cm exigidos. O degrau automatico era desligado exatamente no quadro em
+     * que era necessario, e o ciclo se fechava: barra, zera a velocidade, pede
+     * 1,31 cm, degrau desligado, barra de novo. Para sempre. Medido quadro a
+     * quadro em `tools/portao.mjs`.
+     *
+     * A 144 fps o mesmo pedido vale 0,23 cm, entao qualquer piso em centimetros
+     * volta a travar em maquina rapida: o piso agora so barra pedido nulo. */
+    if (stepHeight > 0 && !subindo && pedidoH > 1e-4 && obtidoH < pedidoH * 0.85) {
       _posAlt.set(start.x, start.y + stepHeight, start.z);
       // so tenta se houver espaco livre no ponto elevado
       _tmpA.copy(_posAlt);
@@ -497,11 +569,11 @@ export class Collision {
         const contatosB = marchar(_posAlt, B.pos, B.normal);
         const obtidoB = Math.hypot(B.pos.x - start.x, B.pos.z - start.z);
         if (obtidoB > obtidoH + 0.005) {
-          // pousa no topo do degrau, nunca acima do limite de subida
-          if (this._sondaChao(B.pos, radius, stepHeight + 0.25, sonda)
-            && sonda.y <= start.y + stepHeight + 0.02 && sonda.y >= start.y - 0.6) {
-            B.pos.y = sonda.y;
-            this._depenetrate(B.pos, radius, height, _push);
+          // desce por busca (preserva o avanco) e so aceita se ficar apoiado
+          const tetoY = start.y + stepHeight + 0.02;
+          const pousoY = this._pousar(B.pos, radius, height, start.y + stepHeight, start.y - 0.6);
+          const dirX = _delta.x / pedidoH, dirZ = _delta.z / pedidoH;
+          if (pousoY <= tetoY && this._degrauApoiado(B.pos, radius, dirX, dirZ, tetoY, sonda)) {
             escolhido = B; contatos = contatosB;
             out.stepped = true;
           }
@@ -521,8 +593,21 @@ export class Collision {
      * ao chao no mesmo quadro em que ele pulava — e a falha dependia do
      * framerate, aparecendo como "as vezes pula, as vezes nao".
      */
-    const subindo = (end.y - start.y) > 1e-4;
-    if (!subindo && this._sondaChao(out.position, radius, 0.24, sonda)) {
+    if (out.stepped) {
+      /* O ramo do degrau ja provou apoio em `_degrauApoiado`. Deixar a sonda
+       * colar o corpo no chao aqui BAIXAVA o corpo de volta para o pe do
+       * meio-fio a cada quadro — era ela que apagava, um quadro depois do
+       * outro, a subida que o degrau tinha acabado de conquistar. Aqui a sonda
+       * so pode SUBIR o corpo (patamar acima do pouso), nunca descer. */
+      out.grounded = true;
+      out.groundNormal.copy(sonda.normal);
+      out.surface = sonda.surface;
+      if (this._sondaChao(out.position, radius, 0.24, sonda) && sonda.y > out.position.y) {
+        out.position.y = sonda.y;
+        out.groundNormal.copy(sonda.normal);
+        out.surface = sonda.surface;
+      }
+    } else if (!subindo && this._sondaChao(out.position, radius, 0.24, sonda)) {
       const gap = out.position.y - sonda.y;
       if (gap < 0.10) {
         out.grounded = true;

@@ -931,6 +931,61 @@ export class AudioEngine {
    * @param {Function} monta funcao que monta as camadas em qualquer contexto
    * @returns {boolean} true se tocou do cache
    */
+  /**
+   * Pre-renderiza os caches de forma de onda durante o boot.
+   *
+   * PORQUE (medido em tools/miolo.mjs): o cache de cada som so e assado na
+   * PRIMEIRA vez que aquele som toca. A parte que monta o grafo das 4 variantes
+   * roda SINCRONA, na thread principal, dentro daquele quadro — e apareceu nos
+   * piores quadros de `ai.update` como `aud.tiro 11,12 ms`, `aud.impacto 9,70`,
+   * `aud.droneInvestida 9,21`. Sempre uma vez por chave, sempre no primeiro uso.
+   *
+   * E exatamente a mesma classe de defeito que a compilacao de shader resolvida
+   * em src/core/Aquecimento.js, e o remedio e o mesmo: pagar atras da barra de
+   * carregamento, onde ninguem sente, em vez de no primeiro tiroteio.
+   *
+   * Chamamos os metodos publicos porque o closure que monta as camadas vive em
+   * cada um deles — nao da para invocar `_preRenderiza` de fora sem duplicar a
+   * receita, e receita duplicada e receita que diverge.
+   *
+   * NAO faz barulho: no boot o AudioContext ainda esta suspenso (o navegador so
+   * o libera apos gesto do usuario), entao o caminho ao vivo que atende enquanto
+   * o cache nao existe nao produz som audivel. `_aquecendo` ainda assim silencia
+   * o barramento por garantia, para o caso de alguem chamar isto com o contexto
+   * ja rodando.
+   */
+  async aquecerCaches() {
+    if (!this.actx || this._cachesAquecidos) return 0;
+    this._cachesAquecidos = true;
+
+    const antes = this._bufs.size;
+    this._aquecendo = true;
+    const pos = { x: 0, y: 0, z: 0 };
+
+    try {
+      // Uma chamada por CHAVE de cache. Superficies e armas vem das mesmas
+      // tabelas que o jogo usa, entao acrescentar material novo aquece sozinho.
+      for (const arma of Object.keys(ARMAS)) { this.tiro(arma, pos, false); }
+      for (const sup of Object.keys(IMPACTOS)) { this.impacto(sup, pos); }
+      for (const sup of Object.keys(PASSOS)) {
+        this.passo(sup, pos, false);
+        this.passo(sup, pos, true);   // andando e correndo sao chaves distintas
+      }
+      this.cartucho(pos, 1);
+      this.droneInvestida(pos);
+      this.droneQueda(pos);
+    } catch { /* aquecimento nunca pode derrubar o boot */ }
+
+    /* Espera as renderizacoes offline terminarem. Sem isto o boot segue e o
+     * primeiro tiroteio ainda pega cache pela metade. */
+    const limite = Date.now() + 4000;
+    while (this._renderizando.size > 0 && Date.now() < limite) {
+      await new Promise((ok) => setTimeout(ok, 30));
+    }
+
+    this._aquecendo = false;
+    return this._bufs.size - antes;
+  }
   _tocaCache(chave, ent, t0, dur, canais, monta) {
     const bufs = this._bufs.get(chave);
     if (!bufs) { this._preRenderiza(chave, dur, canais, monta); return false; }

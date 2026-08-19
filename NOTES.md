@@ -1625,3 +1625,808 @@ geometria em 40 quedas, e a volta (morrer, reiniciar, morrer de novo).
 - **`ctx.time.scale` nao afeta o audio.** O tiro que matou continua decaindo em
   tempo normal enquanto a imagem esta a 42%. Um `playbackRate` na cauda daria o
   efeito completo de camera lenta.
+
+---
+
+## [AI] Carga de regime com bando + drone: onde vai o tempo do `ai.update`
+
+**EM ANDAMENTO — anotacoes gravadas conforme a medicao acontece.** Duas
+tentativas anteriores desta tarefa morreram por erro de servidor sem produzir
+nada; este bloco existe para que uma queda nao apague o raciocinio.
+
+Relato do jogador: *"trava quando tem muito player e aparece um drone; o
+zumbido do drone e o voo dele consomem muito recurso; o problema e CPU, nao
+GPU."* Isso e a carga COMBINADA EM REGIME, nao o susto da primeira aparicao
+(esse era compilacao de shader e ja esta resolvido em `src/core/Aquecimento.js`).
+
+### 0. Leitura de codigo ANTES de medir (hipoteses, ainda sem numero)
+
+Contagem de raios por quadro POR AGENTE, so lendo o codigo:
+
+| quem | onde | raios/quadro | respeita `temOrcamento`? |
+|---|---|---|---|
+| `Enemy` (chao) | `Perception.update` (linha de visada) | 1 | **SIM** (ficha) |
+| `Enemy` | `_mover`: sonda de chao `col.raycast(_olho,-Y,14)` | 1 | **NAO** |
+| `Enemy` | `_apontar`/`_atirar`: oclusao do tiro | 0-1 | **NAO** |
+| `Enemy` | `_acharCobertura`: ate **24** raios NUMA CHAMADA | rajada | **NAO** |
+| `Drone` | `Perception.update` | 1 | **SIM** (ficha) |
+| `Drone` | `_mover` p.1: `_sondarChao` | 1 | **NAO** |
+| `Drone` | `_mover` p.4: sonda rotativa de obstaculo | 1 | **NAO** |
+| `Drone` | `_mover` p.6: varredura do passo | 0-1 | **NAO** |
+| `Drone` | `_mover` p.7: `sphereCast` de depenetracao | 1 (=1 a 8 consultas de BVH) | **NAO** |
+| `Drone` | `_atirar`: oclusao do tiro | 0-1 | **NAO** |
+
+`AIManager.FICHAS_LOS = 6` — o orcamento cobre **so** a linha de visada da
+percepcao. Todo o resto e livre. Previsao a conferir: com 12 hostis + 8 drones,
+6 raios de percepcao contra ~12 (chao) + ~32 (drone) = **~44 raios/quadro fora
+de qualquer orcamento**, mais rajadas de 24 do `_acharCobertura`.
+
+Suspeito adicional, ainda sem numero: `NavGrid.MAX_BUSCAS_FRAME = 4` com
+`NOS_MAX = 9000`. Busca que FALHA expande os 9000 nos inteiros antes de
+desistir, e `_suavizar` roda `linhaLivre` ate 47 vezes por ancora. Quatro dessas
+no mesmo quadro e o candidato mais plausivel para o quadro de 3307 ms com
+`ai.update` = 3248 ms que o `pico.mjs` pegou uma vez em 8 corridas.
+
+Zumbido: `AIManager._zumbir` -> `AudioEngine.zumbidoEnxame`, UMA voz para N
+drones, custo declarado fixo. A conferir com numero antes de dizer ao jogador
+que nao e isso.
+
+### 1. Instrumento: `tools/miolo.mjs` (novo)
+
+
+---
+
+## [WORLD/pe preso] O meio-fio que segura o pe: o portao de 2 cm e o vao de 9 cm
+
+**EM ANDAMENTO — bloco escrito enquanto se mede, para nao se perder de novo.**
+
+Relato: `X -25,91  Y 32,77  Z -64,01`, olho 34,45, rumo 182°, chao 32,74 terra.
+"o chao encrenca no pe na hora de passar". Nao e buraco, e obstrucao.
+
+### 0. AVISO: o laudo de "1 972 travas por aresta baixa" saiu de INSTRUMENTO FURADO
+
+`tools/porquetrava.json` (a tabela com 2 463 casos, 1 972 de aresta baixa e so
+23 paredes) foi gravado por uma versao do `porquetrava.mjs` que media o topo do
+obstaculo com um raio largado a `aqui.y + 1,4` — dentro do bloco da casa, onde o
+raycast de face dupla devolve a face de BAIXO. **Parede de 3 m lia "sobe 0,0 m"**
+e caia no balde de aresta baixa. A propria ferramenta ja traz esse aviso no
+cabecalho; a tabela ficou na arvore e engana quem a ler.
+
+Com o instrumento corrigido (sonda largada do topo da muralha), o MESMO codigo da:
+
+| motivo | casos |
+|---|---|
+| aresta baixa (<= 0,175 m) e mesmo assim travou | 1 271 |
+| PAREDE / degrau alto de verdade (> 0,45 m) | 999 |
+| aresta 0,175..0,45 com patamar bom — DEFEITO | 127 |
+| nao cabe em pe no ponto elevado | 102 |
+| sonda de chao nao acha patamar | 21 |
+
+2 520 travas. Nao sao 23 paredes, sao 999.
+`tools/miolo.mjs` quebra o `ai.update` por sub-sistema com tempo EXCLUSIVO
+(descontado o filho) e conta os RAIOS de cada sub-sistema. Roteiro: campo vazio
+-> so chao (12) -> so drone (10) -> misto (12+6) -> stress (14+10), o mesmo
+piloto nos cinco, campo REPOVOADO a cada 1,5 s para a carga ser de REGIME.
+
+**Duas armadilhas de instrumento que esta ferramenta pagou** (a segunda invalida
+qualquer medicao de sub-sistema feita sem ela):
+
+1. **`performance.now()` do Chrome e grosseirizado em 100 us.** Uma fase de IA
+   que custa 40 us le como 0,0 ou 0,1 ms conforme o arredondamento, e o erro
+   soma por CHAMADA (sao mais de 100 por quadro). A primeira corrida deu
+   `AI TOTAL 0,10 ms` com `solo.anim 0,60` dentro dele — numero impossivel.
+   Correcao: `tools/vite.hires.config.js` serve COOP+COEP, `crossOriginIsolated`
+   fica `true` e a resolucao vai a **5 us**. A ferramenta MEDE a resolucao e
+   grita se o isolamento nao subiu.
+2. **`Enemy._atirar` roda DENTRO de `_pensar`**, e ele emite `enemy:fire`, que o
+   `AudioEngine` escuta. Sem separar, todo o custo de montar voz de audio
+   aparece como se fosse decisao de IA — o primeiro laudo acusou
+   `solo.pensar 13,39 ms` e `drone.pensar 11,88 ms`. Com `_atirar`, `bus.emit` e
+   cada metodo de audio como fase propria, `solo.pensar` caiu para 0,04 ms de
+   p99 e o tempo apareceu onde de fato estava.
+
+### 2. O QUADRO DE 3307 ms COM `ai.update` = 3248 ms — explicado, e NAO e a IA
+
+Em 16 180 quadros gravados a IA nunca passou de **33,68 ms**. Os quadros de
+segundos apareceram, e o instrumento mostra onde eles moram:
+
+| quadro | dt | `ai` | `render` | `fora` | veredito |
+|---|---|---|---|---|---|
+| 12948 | 4714,95 | 2,01 | **4703,12** | 9,61 | dentro do render |
+| 16021 | 4281,89 | 3,90 | 36,48 | **4241,17** | fora do jogo |
+| 16179 | 4234,09 | 3,39 | 26,03 | **4198,55** | fora do jogo |
+| 16081 | 2903,06 | 2,96 | **2883,51** | 16,33 | dentro do render |
+| 45 (campo VAZIO) | 454,24 | 0,01 | 4,13 | **449,86** | fora do jogo |
+
+Um deles caiu com o campo VAZIO. **A bancada engole segundos dentro de qualquer
+bloco que estiver executando** — ha outros agentes rodando Playwright nesta
+maquina. O quadro de 3248 ms que o `pico.mjs` pegou uma vez em 8 corridas e
+disso: a mesma corrida tinha dois quadros de 2,1 e 2,6 s com `fora ~= dt`, ja
+identificados como maquina. **Nao ha defeito de IA de segundos.** Quem repetir a
+medicao numa maquina ociosa deve ver o mesmo teto de ~34 ms.
+
+### 3. ONDE VAI O TEMPO DENTRO DO `ai.update` — 14 de chao + 10 drones
+
+Tempo EXCLUSIVO por fase, 3 297 quadros, resolucao de 5 us:
+
+| fase | p50 | p99 | PIOR | raios/quadro p99 |
+|---|---|---|---|---|
+| `solo.anim` (`Soldier.update`) | **0,70** | 2,18 | 10,07 | 0 |
+| `drone.voo` (`Drone._mover`) | 0,18 | 0,60 | 3,18 | **40** |
+| `solo.mover` | 0,10 | 0,68 | 3,39 | 16 |
+| `percepcao` | 0,07 | 0,23 | 1,20 | 14 |
+| `nav.astar` | 0,00 | **1,99** | **30,61** | 0 |
+| `audicao` (`_ouviram`) | 0,00 | 0,27 | 2,06 | **19** |
+| `aud.grito` | 0,00 | 1,13 | 7,44 | 6 |
+| `bus.emit` | 0,00 | 0,59 | 5,67 | 1 |
+| **`aud.zumbidoEnxame`** | **0,01** | **0,07** | 3,02 | 0 |
+| **AI TOTAL** | **1,43** | **6,04** | **33,68** | — |
+
+### 4. O ZUMBIDO NAO E O PROBLEMA — com numero
+
+`AudioEngine.zumbidoEnxame`, com 10 drones em campo: **p50 0,01 ms, p99 0,07 ms**
+por quadro. Isso e **0,4% do `ai.update`** e **0,4% de um quadro de 16,6 ms**.
+Custo fixo, como projetado: nao cresce com o tamanho do enxame. Descarte de voz
+continua em 0%. **A hipotese do jogador esta errada neste ponto, e ele merece
+saber.** Desligar o zumbido inteiro nao devolveria um fps.
+
+### 5. O VOO E REAL — mas o preco esta em RAIO, nao em ms
+
+`Drone._mover` atira **exatamente 4 raios por drone por quadro**, medido:
+sonda de chao + sonda rotativa de obstaculo + varredura do passo + `sphereCast`
+de depenetracao. Com 10 drones sao **40 raios/quadro so em voo — 47% de todos
+os raios do jogo**, e **nenhum deles passa pelo orcamento**.
+
+| trecho | raios/quadro p50 | p99 | max |
+|---|---|---|---|
+| campo vazio | 6 | 8 | 9 |
+| 12 de chao | 22 | 34 | 51 |
+| 10 drones | 49 | 61 | 67 |
+| 12 chao + 6 drones | 49 | 68 | 79 |
+| 14 chao + 10 drones | **62** | **85** | **109** |
+
+`FICHAS_LOS = 6` e o unico orcamento que existe, e ele cobre so a linha de
+visada da percepcao. No pior trecho: **71 dos 85 raios do p99 (84%) estao fora
+de qualquer orcamento**. Quem atira, no p99: `drone.voo` 40 · `audicao` 19 ·
+`solo.mover` 16 · `percepcao` 14 · `player` 10.
+
+`AIManager._ouviram` merece nota: e **um raycast de oclusao por hostil vivo, por
+evento de som**. Estrangulado a um evento por 0,12 s, mas com 24 vivos isso e
+uma RAJADA de 24 raios num quadro so (medido: max 24).
+
+### 6. O CUSTO QUE NINGUEM ESTAVA OLHANDO: cada hostil custa mais no `render`
+### que no `ai.update`
+
+Regressao da MEDIANA do `engine.render` (CPU) contra o censo, 16 180 quadros:
+
+```
+render = 4,58 ms  +  0,282 ms por hostil de chao  +  0,091 ms por drone
+```
+
+| campo | render p50 | render p99 | ai p50 | ai p99 |
+|---|---|---|---|---|
+| vazio | 4,77 | 8,86 | 0,01 | 0,05 |
+| 12 de chao | 7,79 | 13,26 | 1,10 | 2,77 |
+| 10 drones | 5,11 | 8,19 | 0,35 | 0,69 |
+| 12 chao + 6 drones | 8,09 | 16,32 | 1,28 | 2,82 |
+| 14 chao + 10 drones | 8,51 | 27,59 | 1,42 | 4,15 |
+
+**Um hostil de chao custa 0,282 ms de CPU de desenho + ~0,09 ms de IA = 0,37 ms
+por quadro. Um drone custa 0,091 + 0,035 = 0,13 ms.** O hostil de chao e **2,9x
+mais caro que o drone**. O jogador culpa o drone; o bando e que pesa.
+
+A causa e estrutural e mora em `src/ai/`: cada `Soldier` sao 2 objetos de
+desenho (`SkinnedMesh` do corpo + `Mesh` da arma), os dois com
+`castShadow = true` **e `frustumCulled = false`**. Com 4 cascatas de sombra isso
+e **10 submissoes de desenho por hostil por quadro, sem culling nenhum, mesmo
+quando ele esta atras da camera**. O drone e 1 objeto, e as helices dos 16 cabem
+num `InstancedMesh` (1 draw).
+
+### 7. ALOCACAO — 950 KB/quadro, e agora com o nome da linha
+
+Subida de heap por quadro, por trecho (piso, nunca teto):
+
+| campo | KB/quadro |
+|---|---|
+| vazio | 403 |
+| + 12 de chao | 1 095  (**+58 KB por hostil por quadro**) |
+| + 10 drones | 467  (+6 KB por drone) |
+| 14 chao + 10 drones | 1 121 |
+
+`tools/lixoai.mjs` (novo) mede bytes POR CHAMADA num laco sincrono com o resto
+do jogo parado:
+
+| chamada | bytes/chamada |
+|---|---|
+| **`collision.raycast`** | **817** |
+| **`collision.sphereCast`** | **783** |
+| `Enemy.update` inteiro | 5 002 |
+| `Drone.update` inteiro | 6 066 |
+| `Soldier.update` | 1 668 |
+| ↳ `_bracosNaArma` | 745 |
+| ↳ `_aplicarPernasTorso` | 352 |
+| ↳ `_sanearOssos` | 320 |
+| ↳ `_locomocao` | 224 |
+| `Perception.update` / `Enemy._mover` / `_apontar` | ~0 |
+
+`collision.raycast` aloca 817 B por chamada (o `raycastFirst` do
+`three-mesh-bvh` devolve objeto novo). Com 85 raios/quadro isso e **~70 KB por
+quadro so de lixo de raio** — o mesmo numero que a estrategia de orcamento de
+raios ja quer derrubar por CPU. As duas contas apontam para a mesma correcao.
+
+
+### 1. A causa, com numero: o portao de 2 cm contra o pedido de 1,31 cm
+
+`Collision.capsuleSweep` so tenta o degrau automatico se **cinco** condicoes
+passarem. A primeira e `pedidoH > 0,02` — deslocamento horizontal pedido no
+quadro. E ela que reprova.
+
+`Movement` zera a velocidade planar em TODO quadro em que a varredura nao
+entrega o deslocamento inteiro (`blockedX`/`blockedZ`, tolerancia de 1e-4). No
+quadro seguinte a aceleracao parte do zero e o pedido vale
+`groundAccel * walk * dt^2` = **11,0 x 4,3 / 3600 = 1,31 cm** a 60 fps. Abaixo
+dos 2 cm. **O degrau e desligado exatamente no quadro em que e necessario**, e o
+ciclo se fecha sozinho: barra -> zera -> pede 1,31 cm -> sem degrau -> barra.
+Para sempre.
+
+Medido quadro a quadro na coordenada do relato (`tools/portao.mjs`, novo — le o
+caminho do ramo pela SEQUENCIA de chamadas de `_depenetrate`/`_sondaChao`, sem
+refazer a conta por fora):
+
+```
+     k       s     pedido  avanco       Y  portao
+    30    0.584     0.0717  0.0224   32.693  SUBIU (stepped)
+    31    0.591     0.0717  0.0061   32.691  SUBIU (stepped)
+    32     0.57     0.0131 -0.0210   32.695  portao 1 REPROVOU
+    33..119          0.0131  0.0000..0.0006  portao 1 REPROVOU  (para sempre)
+```
+
+**O obstaculo nao e buraco nem parede.** Perfil medido a frente do ponto onde o
+pe prende (X -25,83 Z -63,44): terra descendo ate 32,601 a 0,30 m, e a 0,35 m
+uma laje de **concreto a 32,880** — degrau de **0,28 m** (0,225 m acima do piso
+local). O `stepHeight` e 0,45: era para subir sem ninguem perceber.
+
+### 2. Por que o degrau nao resolvia nem com o portao aberto: 0,31 m contra 0,217 m
+
+Congelando o quadro travado e variando SO o tamanho do pedido:
+
+| pedido | avanco | Y final | veredito |
+|---|---|---|---|
+| 1,31 cm | 0,000 m | 32,694 | portao 1 |
+| 2,10 cm | 0,012 m | 32,692 | subiu, mas rasteja |
+| 5,00 cm | 0,017 m | 32,691 | subiu, mas rasteja |
+| 7,17 cm (4,3 m/s) | 0,021 m | 32,690 | subiu, mas rasteja |
+| **10,0 cm** | **0,100 m** | **32,846** | subiu de verdade |
+
+A conta que explica: a aresta esta 0,186 m acima do pe, entao no toque
+`push.y = (R - h)/R = 0,469` — **abaixo de `CHAO_PISAVEL_Y` (0,5)**, e o contato
+e tratado como PAREDE. O corpo fica parado a `sqrt(0,35^2 - 0,164^2) = 0,309 m`
+da face. E os cinco raios de `_sondaChao` alcancam so `radius*0,62 = 0,217 m` a
+frente do eixo. **Vao estrutural de 9 cm** que UM quadro tem de vencer sozinho —
+7,17 cm a passo de caminhada nao vence; 10 cm (6 m/s) vence.
+
+Pior: quando a sonda so achava o chao BAIXO, o ramo fazia `B.pos.y = sonda.y` e
+depenetrava — o corpo voltava para o pe do meio-fio e o avanco do quadro morria.
+E a sonda final (`gap < 0,10 -> position.y = sonda.y`) apagava, quadro a quadro,
+qualquer altura que a depenetracao tivesse ganho.
+
+### 3. O que mudou em `src/world/Collision.js`
+
+1. **`pedidoH > 0,02` -> `pedidoH > 1e-4`.** O piso agora so barra pedido nulo.
+   Nao adianta baixar para "1 cm": a 144 fps o mesmo pedido vale 0,23 cm e o
+   travamento voltaria so em maquina rapida.
+2. **O ramo do degrau nao roda subindo** (`!subindo`, a mesma guarda que a sonda
+   final ja tinha). Ele POUSA o corpo; rodando no meio de um pulo, cancelava o
+   pulo. O codigo antigo nao tinha essa guarda no ramo — a mudanca e mais segura
+   que o estado anterior, nao menos.
+3. **`_pousar()` (novo)** — desce a capsula por busca binaria sobre
+   `_depenetrate` e para no Y mais BAIXO em que ela ainda cabe. Substitui
+   "pousa em `_sondaChao` e depenetra", que desfazia o avanco horizontal. Agora
+   o corpo para APOIADO na aresta, alguns centimetros acima, e o avanco vive.
+4. **`_degrauApoiado()` (novo)** — o degrau so e aceito se o corpo ficar
+   apoiado: chao sob os pes a menos de 10 cm, OU um raio lancado
+   `radius + 0,10` a frente achando o TOPO do que segura o pe em cota menor ou
+   igual a `start.y + stepHeight + 0,02`. **A segunda pergunta e o que impede
+   virar escalada**: encostar num muro de 0,60 m tambem deixa a capsula pousada
+   na aresta, 45 cm acima do chao, e sem esse teste isso leria como degrau bom.
+5. **A sonda final so pode SUBIR o corpo depois de um degrau, nunca descer.**
+
+Nada de `CHAO_PISAVEL_Y`, nada de `_sondaChao` (o alcance de 0,62 R e o que
+impede o corpo de flutuar ao passar rente a uma plataforma — mexer ali troca
+este defeito por outro pior).
+
+### 4. Antes e depois NA COORDENADA DO RELATO (X -25,91 · Z -64,01 · rumo 182°)
+
+`tools/portao.mjs`, mesmo instrumento dos dois lados, ciclo do `Movement`
+reproduzido (velocidade zerada ao esbarrar, reaceleracao do zero):
+
+| | antes | depois |
+|---|---|---|
+| onde parou | **travou em s = 0,57 m** | nao travou: andou os 120 quadros ate **s = 7,05 m** |
+| avanco por quadro depois da aresta | 0,0000 a 0,0006 m | **0,0717 m** (passo cheio) |
+| quadros com o degrau ligado | 2 (e depois nunca mais) | 1 (k=30) e pronto |
+| Y ao atravessar | 32,697 e ficava | 32,697 -> **32,786 -> 32,883** (em cima da laje) |
+| `grounded` | verdadeiro, colado no pe do meio-fio | verdadeiro o tempo todo |
+
+**Ele atravessa sem prender.** Um unico quadro com `stepped`, sem perder
+velocidade: k=29 avanco 0,0717 · k=30 avanco 0,0717 e sobe 0,089 m · k=31
+avanco 0,0717 e sobe 0,097 m. Nao ha quadro de rastejo.
+
+`tools/pisadaprova.mjs` (a mesma aresta, uma variavel trocada por vez):
+
+| caso | antes | depois |
+|---|---|---|
+| A) ciclo do jogo (pede 1,31 cm) | **TRAVOU** em s=0,57 | passou, s=4,85 |
+| B) pedido fixo de 7,17 cm | passou | passou |
+| C) pedido fixo de 2,10 cm | **TRAVOU** em s=0,59 | passou, s=2,27 |
+| D) pedido fixo de 1,90 cm | **TRAVOU** em s=0,57 | atravessou (s=0,63), acabou o orcamento |
+| E) ciclo com `stepHeight` 0,60 m | **TRAVOU** em s=0,57 | passou, s=4,85 |
+| F) pedido fixo de 1,31 cm | **TRAVOU** em s=0,57 | atravessou (s=0,64), acabou o orcamento |
+
+E o caso E que absolve a altura do degrau: **subir o `stepHeight` de 0,45 para
+0,60 m nao mudava nada**, porque o ramo inteiro estava desligado.
+
+### 5. Antes e depois no MAPA INTEIRO (`tools/porquetrava.mjs`)
+
+Instrumento identico nos dois lados; o "antes" foi medido revertendo o
+`Collision.js` na arvore e restaurando em seguida (backup em `.novo`).
+
+| motivo | antes | depois |
+|---|---|---|
+| PAREDE / degrau alto de verdade (> 0,45 m) | 1 476 | 1 419 |
+| aresta baixa (<= 0,175) e mesmo assim travou | 861 | 856 |
+| nao cabe em pe no ponto elevado | 93 | 93 |
+| **aresta 0,175..0,45 com patamar bom — DEFEITO** | **71** | **7** |
+| sonda de chao nao acha patamar | 19 | 19 |
+| **total de travas** | **2 520** | **2 394** |
+
+O balde grande ("aresta baixa e mesmo assim travou") e quase todo instrumento,
+nao defeito. Abrindo-o por QUEM barra (raios horizontais em 8 alturas + dois
+raios a 30 cm do eixo, na altura do joelho):
+
+| o que barra | antes | depois |
+|---|---|---|
+| parede/poste ate 1,4 m ou mais na frente | 780 | 788 |
+| nada barra na linha do eixo (obstaculo de LADO) | 55 | 51 |
+| muro baixo / carro (0,55..0,90 m) | 4 | 3 |
+| **bloqueio so ate 0,35 m — aresta de verdade** | **22** | **14** |
+
+Os 788 sao em esmagadora maioria a **muralha de borda** (X ou Z em +-89): a
+sonda de piso larga do topo da muralha, nasce DENTRO dela e le "sobe 0,0 m".
+Barrar ali esta certo.
+
+**Somando o que e defeito de verdade — 71 + 22 = 93 pontos antes, 7 + 14 = 21
+depois. Queda de 77%.**
+
+Invariante anti-escalada, medida nas duas arvores com a mesma marcha:
+**maior subida num unico quadro = 0,769 m, IGUAL antes e depois** (X 44,6
+Z 58,53 — barranco ingreme, e a depenetracao vertical somada com a colagem no
+chao, nao o degrau). O degrau nao passou a levantar ninguem alem do que ja
+levantava.
+
+### 6. A outra hipotese (colisao do terreno 2 m x malha visual 1 m): MEDIDA E RECUSADA
+
+A divida registrada em "[WORLD/PLAYER] ... 7. O que continua aquem" era "casar
+as duas resolucoes custa 4x os triangulos de terreno e **nao foi medido em
+fps**". Medido agora, com `tools/custochao.mjs`, gerando o mundo duas vezes no
+MESMO processo (comparar entre execucoes nao vale nesta maquina: o mesmo quadro
+mede 6 ms ou 25 ms conforme quem mais esteja rodando):
+
+| | 2 m | 1 m | |
+|---|---|---|---|
+| triangulos de COLISAO | 94 360 | 142 960 | +51,5% |
+| dos quais, terreno | 16 200 | 64 800 | +300% |
+| triangulos DESENHADOS | 2 350 801 | 2 350 801 | **0%** |
+| geracao do mundo (com BVH) | 2 123 ms | 2 273 ms | +7,1% |
+| 20 000 raycasts | 73,8 ms | 81,1 ms | +9,9% |
+| 4 000 capsuleSweep | 116,4 ms | 118,8 ms | +2,1% |
+| heap de JS | 527,4 MB | 527,4 MB | 0% |
+| quadro medio | 16,68 ms | 16,67 ms | -0,1% |
+| **fps** | **60** | **60** | **0,0 fps** |
+
+**O fps nao muda, e nao ia mudar**: malha de colisao nao entra em draw call, em
+shadow map nem em shader. Quem paga e o BVH (uma vez) e a consulta. Quem
+esperava queda de fps estava confundindo malha de fisica com malha de render.
+
+Mas o beneficio tambem nao existe. Rodando o MESMO `porquetrava.mjs` com
+`--dec 1` (opcao nova: regenera o mundo dentro da pagina antes de medir), sobre
+o codigo ja corrigido:
+
+| motivo | 2 m | 1 m |
+|---|---|---|
+| total de travas | 2 394 | 2 402 |
+| aresta 0,175..0,45 com patamar bom — DEFEITO | 7 | 8 |
+| aresta baixa e mesmo assim travou | 856 | 856 |
+| — dessas, aresta de verdade | 14 | 7 |
+| — dessas, muro baixo / carro | 3 | 7 |
+
+Sete pontos de aresta a menos em 2 402, com +48 600 triangulos de colisao e
++150 ms de geracao. **`World.DEC_COLISAO_TERRENO` fica em 2.** O terreno
+decimado nunca foi a causa: a malha decimada e uma superficie CONTINUA, sem
+aresta viva — a capsula cavalga por cima dela. O que ela produz e o pe afundando
+ou flutuando alguns centimetros em relacao ao que se ve (3 363 celulas entre
+0,25 e 0,75 m), que e defeito de aparencia, nao de travamento.
+
+Ficou o knob `World.DEC_COLISAO_TERRENO` (estatico, padrao 2) para quem quiser
+refazer a medida sem editar o arquivo.
+
+### 7. Nao-regressao (mesmas ferramentas dos donos anteriores)
+
+- **`tools/casas.mjs degrau3`** — interiores reprovados **6/26**, telhados
+  reprovados **129/293**, telhados alcancaveis do chao **14**, sem saida nenhuma
+  **0**. Os tres numeros identicos aos registrados em `[WORLD/portas]`.
+- **`tools/muralha.mjs`** — 12 encostroes (andando, agachado, deslizando nas 4
+  bordas): todos chegaram na parede, **0 quadros fora dos limites, 0 quedas**,
+  menor folga **0,60 m**, 70/73/67/70 quadros deslizando, sem rasgo entre chao e
+  horizonte. `MARGEM_BORDA` intacta.
+- **`tools/piso.mjs`** — 85 258 celulas andaveis, **0 colunas vazias**, **0 de
+  1 765 tunelaram** a 55 m/s, **0 mergulhos** nas 4 bordas, histograma
+  colisao-x-plano identico ao anterior.
+- **Pulo** (secao nova do `portao.mjs`): capsula subindo a 4,65 m/s encostada na
+  MESMA aresta ganha 7,7 cm no primeiro quadro e segue ganhando; `grounded=false`
+  e `stepped=false` nos 8 quadros. O degrau nao come o pulo.
+- **`node tools/smoke.mjs`** — as 5 paginas OK, canvas desenhado, zero erro.
+
+### 8. O que continua aquem (com endereco, para conferir no F3)
+
+**21 pontos ainda travam onde havia para onde ir.** Nao sao aleatorios: quase
+todos sao aresta de terra em barranco ou quina de laje pegada em muro.
+
+Aresta de 0,175 a 0,45 m com patamar bom (7):
+`89,75 / -71,25` (0,177 terra) · `56,30 / -34,59` (0,409 terra) ·
+`-73,82 / -28,75` (0,444 concreto) · `-32,85 / -26,13` (0,211 concreto) ·
+`-89,75 / 11,25` (0,196 concreto) · `-8,62 / 11,36` (0,199 terra) ·
+`71,28 / 33,79` (0,259 terra)
+
+Aresta baixa com bloqueio so ate 0,35 m (14; oito com endereco):
+`28,72 / -62,87` · `45,54 / -61,31` · `-28,54 / -54,39` · `-71,17 / -43,91` ·
+`-25,34 / -43,68` · `26,77 / -13,68` · `1,22 / -11,40` · `-71,17 / -43,91`
+
+Os dois de X = +-89,75 sao borda de mapa e provavelmente instrumento (a sonda
+nasce dentro da muralha). Os de 0,41 a 0,44 m estao a menos de 1 cm do
+`stepHeight`: sao o limite declarado do sistema, nao surpresa.
+
+Alem disso, **51 travas onde nada barra na linha do eixo** — o obstaculo esta ao
+LADO (o corpo tem 0,70 m de largura e a sonda de piso e uma linha). Ex.:
+`-6,31 / -78,94` · `67,43 / -78,82` · `10,77 / -66,20`. Quem for atras disso
+precisa de uma sonda com a largura do corpo, nao de mais degrau.
+
+### 9. Armadilhas de medicao pagas aqui (nao repita)
+
+1. **`tools/porquetrava.json` (a tabela de 2 463 casos, 1 972 de aresta baixa e
+   23 paredes) saiu de instrumento furado** — ver secao 0. Com o topo do
+   obstaculo medido de cima, sao 2 520 casos, 861 de aresta baixa e 1 476
+   paredes. Nao cite aquele arquivo.
+2. **Medir o degrau SO a 0,6 m a frente subestima.** A capsula para com o eixo a
+   ~0,31 m da face, e dali para frente o terreno pode voltar a descer: na
+   coordenada do relato o degrau vale 0,225 m a 0,35 m e so 0,123 m a 0,60 m —
+   medido a 0,6 m ele caia no balde "aresta baixa (<=0,175)" e o defeito
+   sumia da tabela. O degrau que vale e o MAIOR do perfil de 0,15 a 0,60 m.
+3. **Orcamento FIXO de quadros reprova o teste de pedido pequeno.** No
+   `pisadaprova.mjs`, 90 quadros x 1,9 cm = 1,71 m, e a largada e 1,6 m atras da
+   aresta: os casos C, D e F saiam "passou" sem nunca ter chegado nela. O
+   orcamento tem de ser proporcional ao pedido, e o veredito tem de exigir que o
+   corpo ATRAVESSE.
+4. **`sobe = 0` na borda do mapa nao e chao plano, e muralha.** A sonda larga do
+   topo da muralha (que atravessa o mapa inteiro), nasce dentro dela e le zero.
+   Sempre confira QUEM barra, com raio horizontal, antes de chamar de aresta.
+5. **Comparar antes/depois exige a mesma arvore.** O "antes" desta rodada foi
+   medido revertendo o `Collision.js` no lugar e restaurando em seguida — nao
+   por memoria de um numero antigo, porque as duas correcoes de instrumento
+   acima mudaram TODOS os baldes.
+
+### 10. Ferramentas
+
+- **`tools/portao.mjs` (novo)** — a ferramenta central. Instrumenta o
+  `capsuleSweep` de verdade e diz em QUAL dos cinco portoes o ramo do degrau
+  parou, lendo a sequencia de chamadas de `_depenetrate`/`_sondaChao`. Faz a
+  escada de pedido (do estado travado, variando so o tamanho do passo), o perfil
+  do chao a frente e a prova do pulo. `--x --z --rumo --json`.
+- `tools/porquetrava.mjs` — corrigido (perfil de 0,15 a 0,60 m em vez de so
+  0,60 m) e ampliado: censo de QUEM barra por altura, invariante de subida
+  maxima por quadro, `--dec N` para regerar o mundo com outra decimacao de
+  colisao do terreno.
+- `tools/pisadaprova.mjs` — orcamento proporcional, caso F novo, veredito
+  `INCONCL` quando o corpo nao chegou na aresta.
+- `tools/custochao.mjs` — agora roda (depende de `World.DEC_COLISAO_TERRENO`,
+  reintroduzido). `tools/custochao.json` tem as duas colunas.
+- `tools/meiofio.mjs` — inalterado. Marcha do mapa inteiro: travas 2 481 -> 2 165
+  e marcha cega 286 -> 218. **Leia esses dois com desconfianca**: a varredura
+  geometrica dele mede o piso a frente com raio largado a `aqui.y + 1,2` e cai na
+  mesma armadilha da secao 0, entao boa parte das 2 165 sao parede de casa.
+### 8. A ESTRATEGIA — quatro mudancas, todas em `src/ai/`
+
+O pedido foi "manter aquele bando de gente, drone e tudo mais e ainda assim
+ficar leve". Nenhuma das quatro tira agente de campo: o que muda e o custo POR
+agente e o teto do que pode acontecer num quadro so.
+
+**(a) `NavGrid`: orcamento de NOS por quadro, com busca RETOMAVEL.**
+`MAX_BUSCAS_FRAME = 4` nunca foi orcamento de CPU — e orcamento de CHAMADAS, e
+uma chamada varia 100x (busca que falha paga os 9 000 nos inteiros). Agora ha
+`NOS_POR_QUADRO = 3000` somando todas as buscas, e a busca que estoura o teto
+SUSPENDE guardando heap, selos e geracao, e continua no quadro seguinte de onde
+parou. Nada de trabalho jogado fora, nada de caminho perdido.
+
+**(b) `AIManager`: orcamento de raios com TRES faixas, e LOD por distancia E
+visibilidade.** Uma passada por quadro escreve em cada agente `_dist`,
+`_naTela` (frustum da camera do jogador), `_peso` 0..3 e `_passo`. O peso rege
+raio de conforto, ritmo de pose e sombra da arma. Quem esta em `ATIRAR`/`PAIRAR`
+nunca cai abaixo de peso 2 — degradar quem esta atirando em voce e a unica forma
+de o LOD virar defeito de jogo.
+
+**(c) `Soldier`: culling de verdade, ritmo de pose por peso, sombra da arma.**
+`frustumCulled` era `false` no corpo E na arma — 10 submissoes de desenho por
+hostil por quadro, sem culling, mesmo atras da camera. Agora e `true` com esfera
+envolvente escrita a mao (raio 1,6 m na cintura, cobre braco esticado e corpo
+deitado). A pose do esqueleto resolve a cada 3 quadros para quem esta longe E
+fora da tela, com o `dt` SOMADO (a fase do passo continua correta).
+
+**(d) Alocacao no caminho quente.** `['D','E']` e chaves montadas por template
+(`pose[\`q${l}\`]`, `B[\`perna_${l}\`]`) alocavam array e STRING por acesso, tres
+vezes por quadro por soldado; `[...this.ossos, this.arma]` era array novo de 29
+elementos por quadro; duas `new THREE.Vector3` por quadro em `_bracosNaArma`; e
+`vivos.filter(...)` no `AIManager.update`.
+
+### 9. ANTES x DEPOIS — mesmo instrumento, mesmo roteiro, 300 s cada
+
+| trecho | | dt p99 | dt PIOR | ai p50 | ai p99 | ai PIOR | raios p99 | raios max |
+|---|---|---|---|---|---|---|---|---|
+| 12 chao + 6 drones | antes | 24,95 | 1510,71 | 1,29 | 2,90 | 9,51 | 68 | 79 |
+| | **depois** | **22,30** | **31,15** | 1,18 | **2,38** | **4,74** | **61** | 77 |
+| 14 chao + 10 drones | antes | 82,25 | 4714,95 | 1,43 | 6,04 | 33,68 | 85 | 109 |
+| | **depois** | **24,02** | **37,79** | **1,14** | **2,73** | **4,49** | **64** | **77** |
+
+(Os PIOR de 1 510 e 4 714 ms sao ruido de bancada, ja explicado na secao 2 — nao
+credite a correcao por eles. O numero que a correcao move e o **ai PIOR**, que
+saiu de 33,68 para 4,49 ms, e o **`nav.astar` PIOR, de 30,61 para 2,23 ms**.)
+
+Custo por agente, regressao da mediana do render sobre a corrida inteira:
+
+| | antes | depois |
+|---|---|---|
+| ms de `render` por hostil de chao | 0,282 | **0,125** (-56%) |
+| ms de `render` por drone | 0,091 | **0,048** (-47%) |
+| `solo.anim` p50 (14 em campo) | 0,70 | **0,52** |
+| `solo.anim` PIOR | 10,07 | **2,50** |
+| `nav.astar` p99 / PIOR | 1,99 / 30,61 | **1,31 / 2,23** |
+| `drone.voo` raios/quadro (10 drones) | 40 | **26-28** |
+| alocacao, 12 de chao (KB/quadro) | 1 095 | **831** |
+| alocacao por hostil (KB/quadro) | 58,6 | **37** |
+| alocacao, 14 chao + 10 drones | 1 121 | **762** |
+
+### 10. UMA REGRESSAO QUE A MEDICAO PEGOU — registrada porque quase passou
+
+A primeira versao do orcamento fazia o raio de SEGURANCA consumir o mesmo teto
+dos raios de conforto. Os raios de seguranca do voo sao gastos DENTRO do
+`e.update()` de cada agente, entao com 10 drones eles enchiam o teto de 30 antes
+de metade da lista pedir ficha de linha de visada. `tools/drone.mjs` acusou na
+hora: **9 de 14 drones "NUNCA viu o jogador"** e **zero janelas de tiro em 90 s**
+com 10 drones parados em `alerta` — exatamente a assinatura do defeito de
+maquina de estados descrito na secao 4 do bloco anterior.
+
+Corrigido: seguranca tem contador proprio e nao consome o teto; a linha de visada
+mantem a reserva de `FICHAS_LOS` que sempre teve. **Um orcamento que deixa o
+inimigo cego nao e orcamento, e defeito.**
+
+A segunda versao baixava o ritmo das sondas de voo para todo drone que nao
+estivesse atirando. Medido: percentil 5 da altura caiu de 2,5 para 1,81 m e as
+amostras "raspando" foram de 2-4 para **30 em 900**. Corrigido: o ritmo so cai
+para quem esta longe E FORA DA TELA (`peso 0`).
+
+Prova final do voo, mesmo instrumento nos dois lados, mesma bancada:
+
+| `tools/drone.mjs` secao A (900 amostras) | HEAD (antes) | depois |
+|---|---|---|
+| raspando (< 0,42 m de folga) | 7 | **3** |
+| penetrando (< 0,16 m) | 1 | **0** |
+| janelas de tiro em 90 s (secao C) | — | 136 (referencia antiga: 106) |
+| quadros acima do teto de atiradores | — | 0 de 5 400 |
+
+### 11. O QUE FOI TENTADO E DESFEITO — porque a medicao mandou
+
+Duas ideias que pareciam gratuitas e nao eram. Ficam registradas para ninguem
+tentar de novo:
+
+1. **Sonda de chao do hostil dentro do teto de raios (podendo ser negada, com a
+   altura MANTIDA por um quadro).** Parecia inofensivo: 8 cm de erro a 5 m/s. Nao
+   e. A boca do cano sai da matriz do esqueleto, que sai da altura do corpo, e o
+   tiro so acerta se o raio da boca ate o jogador estiver livre — com a altura
+   defasada num morro de 36 m de desnivel o tiro bate no proprio chao. Economia:
+   2 raios por quadro no p99. Preco: comportamento de combate. **Desfeito** — a
+   sonda e contabilizada (prioridade de seguranca) e nunca negada.
+2. **Reservar fichas de linha de visada para quem tem peso >= 2.** O total
+   continua sendo `FICHAS_LOS`, entao nao havia um ms a ganhar; so mudava QUEM
+   enxerga e quando, que e comportamento. **Desfeito.**
+
+**AFERICAO DO `tools/pressao.mjs` — leia antes de acreditar num numero dele.**
+Tres corridas do MESMO binario (HEAD, sem nenhuma mudanca), mesma bancada,
+mesma hora:
+
+| corrida | dano | tiros da IA | acerto | dano/min |
+|---|---|---|---|---|
+| 1 | 1 567 | 238 | 74,8% | 392 |
+| 2 | 155 | 66 | 43,9% | 39 |
+| 3 | 631 | 150 | 50,0% | 158 |
+
+Ou seja: **10x de espalhamento no mesmo codigo.** (E os tres estao muito abaixo
+dos 2 306-2 594 dano/min registrados quando a ferramenta foi escrita — o mundo
+mudou desde entao; ha outro agente editando `src/world/` agora.) As duas corridas
+com as mudancas desta passada deram 455 e 496 de dano, 124 e 128 tiros, 41,9% e
+49,2% de acerto — dentro do espalhamento do proprio HEAD, e mais consistentes
+entre si do que as tres do HEAD sao entre elas. **Nao ha regressao demonstravel
+de pressao, e tambem nao havia como haver conclusao com uma corrida so.** Quem
+for usar esta ferramenta para decidir alguma coisa precisa de 3+ corridas por
+lado.
+
+### 12. NAO-REGRESSAO — as quatro provas que importavam
+
+| prova | ferramenta | resultado |
+|---|---|---|
+| pre-aquecimento de shader | `tools/pico.mjs` | **0 programas** compilados durante a partida (68 no boot, 68 no fim); pior quadro da partida inteira 38,30 ms |
+| percepcao com audicao e varredura | `tools/reacao.mjs` | 12 de 12 celulas notam E atiram; frente 0,2-0,3 s; lado 2,3-5,7 s; costas 2,2-4,0 s |
+| enxame: prioridade de voz e descarte | `tools/audioenxame.mjs` | **descarte 0%**, `enemy:fire -> tiro` **1:1**, grito humano em maquina **0**, deriva do relogio de audio **1 ms em 12 s (0,01%)** |
+| teto de atiradores e ciclo do drone | `tools/drone.mjs` secao C | 136 janelas em 90 s (referencia antiga 106), duracao 0,87/0,98/1,15 s, **0 quadros acima do teto em 5 400** |
+
+### 13. FERRAMENTAS NOVAS
+
+- **`tools/miolo.mjs`** — a principal. Quebra o `ai.update` por sub-sistema com
+  tempo EXCLUSIVO e conta os raios de cada um. `MEDIR=` segundos, `TAG=` nomeia
+  o dump, `CENA=misto|chao|enxame|stress` roda so um trecho. Dumps de referencia:
+  `tools/miolo.antes.json` e `tools/miolo.depois.json`.
+- **`tools/vite.hires.config.js`** — serve COOP+COEP. **Obrigatorio** para
+  qualquer medicao de sub-sistema: sem ele `performance.now()` e grosseirizado
+  em 100 us e a quebra por fase e ficcao.
+- **`tools/miololer.mjs`** — re-analisa um dump ja gravado. Corrida e cara e a
+  bancada e ruidosa; responder pergunta nova sem pagar outra corrida e o unico
+  jeito honesto de comparar hipoteses.
+- **`tools/lixoai.mjs`** — bytes por chamada, num laco sincrono com o resto do
+  jogo parado. Aqui o laco sincrono e VANTAGEM: nenhum outro sistema aloca no
+  meio da conta.
+- **`tools/lod.mjs`** — alavancas intercaladas dentro da mesma corrida. Foi ela
+  que mostrou que as alavancas de desenho valem ~0,5 ms e nao os 3,4 ms que a
+  regressao sugeria — a diferenca e que em combate os hostis estao quase todos
+  na tela, entao o culling tem pouco a cortar.
+
+### 14. O QUE CONTINUA AQUEM
+
+- **`engine.render` e o dono do quadro, nao a IA.** Com 24 agentes: `render`
+  p50 7,0 ms contra `ai.update` p50 1,1 ms. Cortei a parte que era da IA (0,282
+  -> 0,125 ms por hostil), mas o piso de ~5 ms de campo vazio e do mundo e do
+  PostFX, e nao e meu.
+- **`AIManager._ouviram` ainda e uma rajada de ate 20 raios num quadro.** O
+  orcamento derruba a oclusao de quem esta longe, mas o laco continua sendo O(n)
+  por evento de som. O certo seria uma grade de vizinhanca.
+- **Alocacao ainda e ~760 KB/quadro** com 24 agentes (era 1 121). O que sobra
+  esta em `collision.raycast` (817 B por chamada, modulo WORLD), nos payloads
+  de evento (`origin: _v.clone()` em todo `enemy:fire`) e fora da IA.
+- **`Soldier._orientarMao` e `_resolverBraco` ainda montam string por acesso**
+  (`punho_${l}`). Sao ~200 B por soldado por quadro que ficaram.
+- **O `tools/drone.mjs` secao B acusa 6-7 de 14 drones que nunca veem o
+  jogador**, presos em `suspeito` a 24-27 m com altitude de 1,6 m — abaixo do
+  `ALT_MIN` de 2,4. Isso **ja acontece no HEAD** (7 de 14 na mesma bancada), nao
+  e desta passada, e parece ser drone preso em beco baixo. Fica registrado como
+  defeito pre-existente com pista.
+- **O LOD nao ajuda quando todo mundo esta na tela**, que e justamente o caso do
+  relato. O ganho de regime vem do orcamento e do culling, nao do LOD.
+
+---
+
+## [AI] PONTO DE RETOMADA — passada interrompida a pedido do usuario
+
+**A passada acima foi INTERROMPIDA no meio** (a maquina foi devolvida ao
+usuario). O codigo esta completo e compila; o que falta e **a corrida final de
+afericao**. Leia esta secao antes de acreditar na tabela da secao 9.
+
+### Estado da arvore
+
+Compilam e carregam, todos verificados um a um depois da ultima edicao:
+`src/ai/AIManager.js` · `Drone.js` · `Enemy.js` · `NavGrid.js` · `Perception.js`
+· `Soldier.js`. **Nao ha arquivo pela metade.** `src/fx/AudioEngine.js` NAO foi
+tocado — o defeito de audio que o jogador suspeitava nao existe (secao 4).
+
+Nenhum processo ficou de pe: nenhum Vite meu, nenhum Chromium de Playwright.
+
+### O QUE JA ESTA MEDIDO E VALE (nao remeça)
+
+1. **O zumbido do enxame NAO e o problema.** `aud.zumbidoEnxame` com 10 drones:
+   **p50 0,01 ms · p99 0,07 ms** por quadro = 0,4% do `ai.update` e 0,4% de um
+   quadro. Custo fixo, nao cresce com o enxame. Descarte de voz 0%. **Diga isso
+   ao jogador.**
+2. **O voo do drone e real, mas o preco esta em RAIO, nao em ms.** 4 raios por
+   drone por quadro, 40 com 10 drones = 47% de todos os raios do jogo, e
+   **nenhum passava por orcamento** (84% do total de 85 raios do p99 estava fora
+   de qualquer teto). `raycast` custa ~12 us e **817 B de lixo** por chamada.
+3. **O quadro de 3307 ms com `ai.update` = 3248 ms era A BANCADA, nao a IA.** Em
+   16 180 quadros gravados a IA nunca passou de 33,68 ms; na mesma corrida
+   apareceram quadros de 4 714 ms com `render` = 4 703 e de 4 281 ms com
+   `fora` = 4 241, **um deles com o campo VAZIO**. Caso encerrado.
+4. **O custo que ninguem estava olhando:** `render = 4,58 ms + 0,282 ms por
+   hostil de chao + 0,091 ms por drone`. O hostil de chao custa **2,9x o drone**,
+   e custa mais no `render` do que no `ai.update` inteiro.
+5. **Alocacao:** 403 KB/quadro com campo vazio, 1 095 com 12 hostis
+   (**+58 KB por hostil por quadro**), 1 121 com 24 agentes.
+   `collision.raycast` = 817 B/chamada, `Soldier.update` = 1 668 B/chamada.
+
+### O QUE JA FOI DESCARTADO, E COM QUE EVIDENCIA
+
+| hipotese | evidencia que a derruba |
+|---|---|
+| zumbido do drone | p99 de 0,07 ms com 10 drones (item 1 acima) |
+| travamento de segundos e da IA | 4 quadros de 1 a 4,7 s medidos, TODOS em `render` ou `fora`, um com campo vazio (item 3) |
+| coleta de lixo causa os picos | dos 50 piores quadros, 4 tem coleta junto, contra uma taxa base de 7,4% dos quadros — sem correlacao |
+| compilacao de shader | 0 programas novos durante a partida, 68 no boot e 68 no fim (`pico.mjs`, ja com o `Aquecimento`) |
+| `pressao.mjs` serve para decidir com uma corrida | 3 corridas do MESMO HEAD deram 1 567 / 155 / 631 de dano — **10x de espalhamento** (secao 11) |
+
+### O QUE JA FOI FEITO NO CODIGO (secao 8) e o que dele JA TEM PROVA
+
+Com prova, medido depois da mudanca:
+- `nav.astar` PIOR **30,61 -> 2,23 ms** e p99 1,99 -> 1,31 (orcamento de NOS por
+  quadro + busca retomavel).
+- `ai.update` PIOR **33,68 -> 4,49 ms**, p99 6,04 -> 2,73 (24 agentes).
+- `render` por hostil **0,282 -> 0,125 ms**; por drone **0,091 -> 0,048**.
+- Raios/quadro no stress **p99 85 -> 64, max 109 -> 77**.
+- Alocacao com 24 agentes **1 121 -> 762 KB/quadro**.
+- Voo do drone: raspando **7 -> 3**, penetrando **1 -> 0** (contra o HEAD, mesma
+  bancada, `tools/drone.mjs` secao A).
+- Nao-regressao verificada: `pico.mjs` (0 programas), `reacao.mjs` (12/12
+  celulas notam e atiram), `audioenxame.mjs` (descarte 0%, 1:1, grito 0),
+  `drone.mjs` secao C (136 janelas, 0 quadros acima do teto em 5 400).
+
+### >>> O PROXIMO PASSO, E POR QUE <<<
+
+**A tabela ANTES x DEPOIS da secao 9 esta DESATUALIZADA.** Ela foi gravada
+ANTES dos dois desfazimentos da secao 11 (a sonda de chao do hostil voltou a ser
+incondicional e a reserva de fichas de linha de visada foi revertida). Os dois
+desfazimentos **adicionam raios de volta**, entao os numeros reais de hoje sao um
+pouco piores que os da tabela — nunca melhores.
+
+Primeira coisa a fazer ao retomar, numa maquina ociosa:
+
+```
+MEDIR=300 TAG=depois node tools/miolo.mjs        # ~7 min, regrava o dump
+node tools/miololer.mjs depois                   # le o dump, sem nova corrida
+```
+
+e substituir a tabela da secao 9 pelos numeros novos. **O dump
+`tools/miolo.depois.json` que esta no disco e da versao PRE-desfazimento** — o
+`tools/miolo.antes.json` (lado "antes") continua valido e nao precisa ser
+refeito.
+
+Depois disso, e so depois, `node tools/smoke.mjs` com o dev server de pe.
+(O smoke passou verde na versao intermediaria; falta repetir no estado final.)
+
+### FERRAMENTAS — o que criei e como se roda
+
+| ferramenta | para que serve | como roda |
+|---|---|---|
+| `tools/miolo.mjs` **(nova, principal)** | quebra o `ai.update` por sub-sistema com tempo EXCLUSIVO e conta os raios de cada um | `MEDIR=300 TAG=depois node tools/miolo.mjs` · `CENA=misto` roda so um trecho |
+| `tools/vite.hires.config.js` **(nova)** | serve COOP+COEP. **Sem ela `performance.now()` e grosseirizado em 100 us e a quebra por fase e ficcao.** O `miolo.mjs` ja a usa e AFERE a resolucao | nao se roda direto |
+| `tools/miololer.mjs` **(nova)** | re-analisa um dump ja gravado, por sistema e por trecho | `node tools/miololer.mjs [tag] [trecho]` |
+| `tools/lixoai.mjs` **(nova)** | bytes alocados POR CHAMADA, laco sincrono com o resto do jogo parado | `node tools/lixoai.mjs` |
+| `tools/lod.mjs` **(nova)** | alavancas de desenho INTERCALADAS na mesma corrida (a bancada e ruidosa demais para comparar corridas) | `VOLTAS=5 SEG=5 node tools/lod.mjs` |
+
+Nao alterei nenhuma ferramenta existente. `pico.mjs`, `drone.mjs`, `reacao.mjs`,
+`pressao.mjs`, `audioenxame.mjs` estao como estavam.
+
+### SUSPEITAS — NAO SAO ACHADOS, nao trate como tal
+
+- **SUSPEITA:** os quadros isolados de 5 a 14 ms dentro de `aud.tiro`,
+  `aud.impacto` e `aud.droneInvestida` (p99 de 0,18 ms, PIOR de 13,27) sao pausa
+  de maquina/coleta caindo dentro de quem estava executando, e nao custo do
+  `AudioEngine`. O indicio: no MESMO quadro tres funcoes diferentes espicham
+  juntas. **Nao provado.** Para provar seria preciso tracing do V8 via CDP com a
+  categoria `disabled-by-default-v8.gc`, que nao cheguei a montar.
+- **SUSPEITA:** `tools/drone.mjs` secao B acusa drones presos em `suspeito` a
+  24-27 m com altitude **1,6 m**, abaixo do `ALT_MIN` de 2,4 — parece drone
+  entalado em beco baixo. Acontece **igual no HEAD** (7 de 14 contra 6 de 14),
+  entao **nao e desta passada**, mas e defeito pre-existente com pista.
+- **SUSPEITA:** `TETO_RAIOS = 30` foi escolhido por estimativa, nao por
+  varredura. Nunca medi a curva de qualidade x teto. Pode estar folgado ou
+  apertado demais; o jeito de descobrir e varrer o valor com o `miolo.mjs`.
+
+### ARQUIVOS DE RASCUNHO QUE DEIXEI (podem ser apagados)
+
+`tools/miolo.teste.json`, `tools/miolo.teste2.json`, `tools/miolo.teste3.json`,
+`tools/lod.json` — dumps de calibragem do instrumento, sem valor de referencia.
+Os que valem sao `tools/miolo.antes.json` (valido) e `tools/miolo.depois.json`
+(**pre-desfazimento, precisa ser regravado**).

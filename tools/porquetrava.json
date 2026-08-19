@@ -1,0 +1,775 @@
+{
+ "testados": 2463,
+ "motivos": {
+  "aresta baixa (<=0,175) e mesmo assim travou": 1972,
+  "sonda de chao nao acha patamar": 88,
+  "nao cabe em pe no ponto elevado": 238,
+  "degrau alto demais (> 0.45 m)": 18,
+  "aresta 0,175..0,45 com patamar bom — DEFEITO": 124,
+  "PAREDE de verdade (nao cabe de pe em cima)": 23
+ },
+ "casos": [
+  {
+   "x": 58.72,
+   "z": -76.68,
+   "y": 34.517,
+   "sobe": 0.256,
+   "supFrente": "terra",
+   "nyFrente": 1,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 34.534,
+   "limiteAceito": 34.987,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 34.517
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 33.76,
+   "z": -69.34,
+   "y": 33.738,
+   "sobe": 0.341,
+   "supFrente": "concreto",
+   "nyFrente": 0.75,
+   "supAqui": "asfalto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 33.756,
+   "limiteAceito": 34.208,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 33.738
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 38.76,
+   "z": -69.61,
+   "y": 34.261,
+   "sobe": 0.236,
+   "supFrente": "concreto",
+   "nyFrente": 0.83,
+   "supAqui": "concreto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 34.275,
+   "limiteAceito": 34.731,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 34.261
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 51.23,
+   "z": -65.22,
+   "y": 33.058,
+   "sobe": 0.274,
+   "supFrente": "concreto",
+   "nyFrente": 0.86,
+   "supAqui": "asfalto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 33.069,
+   "limiteAceito": 33.528,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 33.058
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": -40.62,
+   "z": -63.61,
+   "y": 30.83,
+   "sobe": 0.194,
+   "supFrente": "terra",
+   "nyFrente": 0.74,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 30.841,
+   "limiteAceito": 31.3,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 30.83
+    }
+   ],
+   "deps": [
+    3,
+    0,
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 1,
+   "dz": 0
+  },
+  {
+   "x": -3.7,
+   "z": -62.85,
+   "y": 31.316,
+   "sobe": 0.218,
+   "supFrente": "concreto",
+   "nyFrente": 0.91,
+   "supAqui": "asfalto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.325,
+   "limiteAceito": 31.786,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.316
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": -1.19,
+   "z": -63.62,
+   "y": 31.279,
+   "sobe": 0.242,
+   "supFrente": "concreto",
+   "nyFrente": 0.85,
+   "supAqui": "asfalto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.29,
+   "limiteAceito": 31.749,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.279
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 1.3,
+   "z": -64.38,
+   "y": 31.62,
+   "sobe": 0.197,
+   "supFrente": "concreto",
+   "nyFrente": 0.98,
+   "supAqui": "asfalto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.629,
+   "limiteAceito": 32.09,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.62
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 51.24,
+   "z": -65.22,
+   "y": 33.057,
+   "sobe": 0.274,
+   "supFrente": "concreto",
+   "nyFrente": 0.86,
+   "supAqui": "asfalto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 33.068,
+   "limiteAceito": 33.527,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 33.057
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 81.33,
+   "z": -63.22,
+   "y": 31.287,
+   "sobe": 0.232,
+   "supFrente": "concreto",
+   "nyFrente": 1,
+   "supAqui": "concreto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.287,
+   "limiteAceito": 31.757,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.7,
+     "ok": true,
+     "y": 31.287
+    },
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.287
+    }
+   ],
+   "deps": [
+    2,
+    0,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": -3.69,
+   "z": -62.86,
+   "y": 31.316,
+   "sobe": 0.218,
+   "supFrente": "concreto",
+   "nyFrente": 0.91,
+   "supAqui": "asfalto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.325,
+   "limiteAceito": 31.786,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.316
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 41.18,
+   "z": -61.93,
+   "y": 33.123,
+   "sobe": 0.208,
+   "supFrente": "concreto",
+   "nyFrente": 0.85,
+   "supAqui": "concreto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 33.134,
+   "limiteAceito": 33.593,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.7,
+     "ok": true,
+     "y": 33.13
+    },
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 33.123
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 1.31,
+   "z": -58.01,
+   "y": 30.49,
+   "sobe": 0.342,
+   "supFrente": "concreto",
+   "nyFrente": 0.71,
+   "supAqui": "concreto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 30.51,
+   "limiteAceito": 30.96,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 30.49
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 48.68,
+   "z": -59,
+   "y": 31.812,
+   "sobe": 0.218,
+   "supFrente": "concreto",
+   "nyFrente": 0.84,
+   "supAqui": "concreto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.824,
+   "limiteAceito": 32.282,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.812
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 61.24,
+   "z": -59.61,
+   "y": 31.538,
+   "sobe": 0.185,
+   "supFrente": "concreto",
+   "nyFrente": 0.88,
+   "supAqui": "concreto",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 31.549,
+   "limiteAceito": 32.008,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 31.538
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 37.48,
+   "z": -50.89,
+   "y": 29.588,
+   "sobe": 0.189,
+   "supFrente": "terra",
+   "nyFrente": 0.87,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 29.599,
+   "limiteAceito": 30.058,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 29.588
+    }
+   ],
+   "deps": [
+    2,
+    0,
+    2
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": -1,
+   "dz": 0
+  },
+  {
+   "x": -6.19,
+   "z": -50.02,
+   "y": 28.346,
+   "sobe": 0.223,
+   "supFrente": "terra",
+   "nyFrente": 0.87,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 28.358,
+   "limiteAceito": 28.816,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 28.346
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": -1.19,
+   "z": -49.34,
+   "y": 27.7,
+   "sobe": 0.361,
+   "supFrente": "terra",
+   "nyFrente": 0.67,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 27.721,
+   "limiteAceito": 28.17,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 27.7
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 13.63,
+   "z": -49.48,
+   "y": 27.918,
+   "sobe": 0.228,
+   "supFrente": "terra",
+   "nyFrente": 0.78,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 27.931,
+   "limiteAceito": 28.388,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 27.918
+    }
+   ],
+   "deps": [
+    2,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": -18.69,
+   "z": -41.26,
+   "y": 29.237,
+   "sobe": 0.194,
+   "supFrente": "terra",
+   "nyFrente": 1,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 29.249,
+   "limiteAceito": 29.707,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 29.237
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": -1,
+   "dz": 0
+  },
+  {
+   "x": 85.49,
+   "z": -41.23,
+   "y": 24.506,
+   "sobe": 0.18,
+   "supFrente": "terra",
+   "nyFrente": 0.89,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 24.517,
+   "limiteAceito": 24.976,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 24.506
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": -1,
+   "dz": 0
+  },
+  {
+   "x": -18.54,
+   "z": -38.75,
+   "y": 29.007,
+   "sobe": 0.376,
+   "supFrente": "terra",
+   "nyFrente": 0.64,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 29.031,
+   "limiteAceito": 29.477,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 29.007
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": -1,
+   "dz": 0
+  },
+  {
+   "x": 14.11,
+   "z": -38.81,
+   "y": 25.644,
+   "sobe": 0.199,
+   "supFrente": "terra",
+   "nyFrente": 0.88,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 25.654,
+   "limiteAceito": 26.114,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 25.644
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 1,
+   "dz": 0
+  },
+  {
+   "x": 38.81,
+   "z": -38.61,
+   "y": 26.585,
+   "sobe": 0.181,
+   "supFrente": "terra",
+   "nyFrente": 0.79,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 26.595,
+   "limiteAceito": 27.055,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 26.585
+    }
+   ],
+   "deps": [
+    2,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  },
+  {
+   "x": 56.32,
+   "z": -37.22,
+   "y": 25.44,
+   "sobe": 0.309,
+   "supFrente": "terra",
+   "nyFrente": 0.72,
+   "supAqui": "terra",
+   "cabeEmCima": true,
+   "contatosEmCima": 0,
+   "patamar": 25.458,
+   "limiteAceito": 25.91,
+   "patamarNaFaixa": true,
+   "pedirDeDe": true,
+   "sondas": [
+    {
+     "alc": 0.24,
+     "ok": true,
+     "y": 25.44
+    }
+   ],
+   "deps": [
+    1,
+    0,
+    1
+   ],
+   "motivo": "aresta 0,175..0,45 com patamar bom — DEFEITO",
+   "dx": 0,
+   "dz": -1
+  }
+ ]
+}

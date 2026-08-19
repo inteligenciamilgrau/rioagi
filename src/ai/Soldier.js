@@ -1076,6 +1076,28 @@ const _e1 = new THREE.Euler();
 const _cotovelo = new THREE.Vector3();
 // Exclusivas de _resolverBraco: ik2() clobbera _v1/_v2 e nao podem ser usadas la.
 const _ombroPos = new THREE.Vector3();
+
+/* ------------------------------------------------------------------------ *
+ * Tabelas fixas para o caminho quente da animacao.
+ *
+ * MEDIDO (`tools/lixoai.mjs`): `Soldier.update` alocava 1 668 B por quadro POR
+ * hostil — com 12 em campo, 19,6 KB por quadro so de animacao, contra a regra 6
+ * do ARCHITECTURE.md. Nao era um vetor esquecido: eram `['D','E']` (array novo
+ * a cada chamada, tres vezes por quadro) e as chaves montadas por template
+ * (`pose[`q${l}`]`, `B[`perna_${l}`]`), que alocam STRING por acesso — quatro
+ * por perna, por quadro, por soldado.
+ *
+ * A tabela abaixo troca isso por chaves e indices constantes. O resultado
+ * numerico e identico; o que muda e nao produzir lixo.
+ * ------------------------------------------------------------------------ */
+const PERNAS = [
+  { lado: 'D', sinal: 1, kq: 'qD', kk: 'kD', kt: 'tD', kab: 'abD', desloc: 0 },
+  { lado: 'E', sinal: -1, kq: 'qE', kk: 'kE', kt: 'tE', kab: 'abE', desloc: Math.PI },
+];
+const BRACOS = ['D', 'E'];
+/** Direcao da palma, por lado. Eram `new THREE.Vector3` por quadro. */
+const PALMA_D = new THREE.Vector3(0.10, -0.92, 0.38);
+const PALMA_E = new THREE.Vector3(-0.22, -0.55, -0.80);
 const _alvoIK = new THREE.Vector3();
 const _poloIK = new THREE.Vector3();
 
@@ -1145,12 +1167,35 @@ export class Soldier {
       this.porNome[nome] = b;
     }
 
+    /* Referencias diretas dos ossos de perna: `B[`perna_${l}`]` monta string a
+     * cada acesso, quatro por perna por quadro por soldado. */
+    this._ossosPerna = PERNAS.map((P) => ({
+      perna: this.porNome['perna_' + P.lado],
+      joelho: this.porNome['joelho_' + P.lado],
+      tornozelo: this.porNome['tornozelo_' + P.lado],
+    }));
+
     this.esqueleto = new THREE.Skeleton(this.ossos, rec.boneInverses.map((m) => m.clone()));
     this.malha = new THREE.SkinnedMesh(rec.geo, rec.material);
     this.malha.name = 'soldado:corpo';
     this.malha.castShadow = true;
     this.malha.receiveShadow = true;
-    this.malha.frustumCulled = false;
+    /* CULLING LIGADO, com esfera envolvente ESCRITA A MAO.
+     *
+     * Estava desligado, e com razao: a esfera de bind de um `SkinnedMesh` nao
+     * acompanha o esqueleto, entao um boneco em pose extrema (ou um ragdoll
+     * esparramado) sairia da esfera e piscaria fora da tela. Mas desligar o
+     * culling faz o corpo E a arma serem submetidos no passe principal E em
+     * TODAS as cascatas de sombra, sempre — inclusive com o hostil atras da
+     * camera. Medido: 0,282 ms de CPU de desenho por hostil por quadro.
+     *
+     * A esfera abaixo e deliberadamente folgada: raio 1,6 m num boneco de 1,80,
+     * centrada na cintura. Ela cobre braco esticado, pulo, agachamento e corpo
+     * deitado (meio comprimento 0,9 m) com margem de sobra. `three` faz o teste
+     * contra ela transformada pela `matrixWorld`, entao ela acompanha o agente.
+     * A esfera do drone e escrita no `Drone.js`, pelo mesmo motivo. */
+    this.malha.frustumCulled = true;
+    this.malha.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.9, 0), 1.6);
     this.grupo.add(this.malha);
     this.malha.bind(this.esqueleto, new THREE.Matrix4());
 
@@ -1158,7 +1203,10 @@ export class Soldier {
     this.arma = new THREE.Mesh(rec.geoArma, rec.material);
     this.arma.name = 'soldado:arma';
     this.arma.castShadow = true;
-    this.arma.frustumCulled = false;
+    /* A arma e uma `Mesh` rigida presa ao osso do peito: a esfera da geometria
+     * dela e exata e a `matrixWorld` a leva junto. Aqui o culling e correto sem
+     * nenhum ajuste — so estava desligado por simetria com o corpo. */
+    this.arma.frustumCulled = true;
     this.porNome.peito.add(this.arma);
     this.temArma = true;
 
@@ -1218,6 +1266,11 @@ export class Soldier {
     this._olho = new THREE.Vector3();
     this._olharDir = new THREE.Vector3(0, 0, -1);
 
+    /** Amortizacao da pose — escrito pelo `AIManager._lodDoSoldado`. */
+    this.ritmoPose = 1;
+    this._contaPose = 1;
+    this._dtPose = 0;
+
     this._zerarPose();
   }
 
@@ -1250,7 +1303,14 @@ export class Soldier {
     /* A arma entra junto: ela nao e osso, mas `posCano()` deriva da matriz dela
      * e alimenta o `origin` do evento enemy:fire. Origem NaO-finita chegava na
      * WebAudio como frequencia de filtro e derrubava o handler do tiro. */
-    const alvos = this.arma ? [...this.ossos, this.arma] : this.ossos;
+    /* A lista e montada UMA vez. Ela era `[...this.ossos, this.arma]` — array
+     * novo de 29 elementos a cada quadro, 320 B por soldado por quadro. */
+    let alvos = this._alvosSanidade;
+    if (!alvos || alvos.length !== this.ossos.length + (this.arma ? 1 : 0)) {
+      alvos = this.ossos.slice();
+      if (this.arma) alvos.push(this.arma);
+      this._alvosSanidade = alvos;
+    }
     for (const b of alvos) {
       const q = b.quaternion, p = b.position;
       const ok = Number.isFinite(q.x + q.y + q.z + q.w)
@@ -1339,6 +1399,26 @@ export class Soldier {
     sincronizarIBL(this.ctx);
     if (S.morto && S.ragdoll) { S.ragdoll.aplicar(this); return; }
 
+    /* AMORTIZACAO DA POSE. `ritmoPose` e escrito pelo `AIManager` a cada quadro
+     * (1 = todo quadro; 2 ou 3 = a cada 2 ou 3, para quem esta longe E fora da
+     * tela). O `dt` pulado e SOMADO e entregue inteiro na vez seguinte: a fase
+     * do ciclo de passo continua correta e o boneco nao anda em camera lenta —
+     * o que cai e so a taxa de reamostragem da pose.
+     *
+     * Motivo: `Soldier.update` mede 0,70 ms de p50 com 14 hostis em campo, ou
+     * seja METADE do `ai.update` inteiro (`tools/miolo.mjs`). */
+    if (this.ritmoPose > 1) {
+      this._dtPose += dt;
+      if (--this._contaPose > 0) return;
+      this._contaPose = this.ritmoPose;
+      dt = this._dtPose;
+      this._dtPose = 0;
+    } else if (this._dtPose > 0) {
+      dt += this._dtPose;
+      this._dtPose = 0;
+      this._contaPose = 1;
+    }
+
     // suavizacoes
     S.agachado = lerp(S.agachado, S.agachadoAlvo ?? 0, 1 - Math.exp(-9 * dt));
     S.mirando = lerp(S.mirando, S.miraAlvo ?? 0, 1 - Math.exp(-7 * dt));
@@ -1398,8 +1478,9 @@ export class Soldier {
     const baseJoelho = 0.09 + S.agachado * 1.15;
     const f = S.fase;
 
-    for (const l of ['D', 'E']) {
-      const fl = l === 'D' ? f : f + Math.PI;
+    for (let i = 0; i < 2; i++) {
+      const P = PERNAS[i];
+      const fl = f + P.desloc;
       const q = ampQuadril * Math.sin(fl) + S.agachado * 0.92;
       // flexao do joelho: pico grande no balanco (fl~0) + pequeno na recepcao
       const balanco = Math.pow(Math.max(0, Math.cos(fl)), 1.6) * ampJoelho;
@@ -1409,9 +1490,9 @@ export class Soldier {
       const impulso = -Math.pow(Math.max(0, Math.sin(fl - 4.0)), 2) * 0.55 * intens;
       const entrada = Math.pow(Math.max(0, Math.sin(fl - 1.5)), 2) * 0.24 * intens;
       const t = clamp(-(q - k) * 0.85 + impulso + entrada - S.agachado * 0.35, -0.85, 0.75);
-      pose[`q${l}`] = q; pose[`k${l}`] = k; pose[`t${l}`] = t;
+      pose[P.kq] = q; pose[P.kk] = k; pose[P.kt] = t;
       // abducao leve para o passo nao cruzar
-      pose[`ab${l}`] = (l === 'D' ? 1 : -1) * (0.03 + 0.03 * intens);
+      pose[P.kab] = P.sinal * (0.03 + 0.03 * intens);
     }
 
     // contra-rotacao: quadril e ombro giram em sentidos opostos
@@ -1467,11 +1548,14 @@ export class Soldier {
       pose.peitoRoll * 0.5,
     );
 
-    for (const l of ['D', 'E']) {
-      B[`perna_${l}`].rotation.set(pose[`q${l}`], 0, pose[`ab${l}`]);
-      B[`joelho_${l}`].rotation.set(-pose[`k${l}`], 0, 0);
-      B[`tornozelo_${l}`].rotation.set(pose[`t${l}`], 0, 0);
+    for (let i = 0; i < 2; i++) {
+      const P = PERNAS[i];
+      const O = this._ossosPerna[i];
+      O.perna.rotation.set(pose[P.kq], 0, pose[P.kab]);
+      O.joelho.rotation.set(-pose[P.kk], 0, 0);
+      O.tornozelo.rotation.set(pose[P.kt], 0, 0);
     }
+    void B;
   }
 
   /** Look-at ponderado: cabeca puxa mais, peito acompanha, coluna completa. */
@@ -1611,9 +1695,9 @@ export class Soldier {
     }
     if (usarMaoE) this._resolverBraco('E', _v5, S.pesoMaoE);
 
-    // maos orientadas pela arma
-    this._orientarMao('D', new THREE.Vector3(0.10, -0.92, 0.38));
-    if (S.pesoMaoE > 0.4) this._orientarMao('E', new THREE.Vector3(-0.22, -0.55, -0.80));
+    // maos orientadas pela arma (direcoes de modulo: eram `new` por quadro)
+    this._orientarMao('D', PALMA_D);
+    if (S.pesoMaoE > 0.4) this._orientarMao('E', PALMA_E);
   }
 
   /** Trajetoria da mao esquerda durante a recarga, em espaco do personagem. */

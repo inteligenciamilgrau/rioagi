@@ -1,0 +1,40 @@
+[
+ {
+  "dec": 2,
+  "trisColisao": 94360,
+  "trisTerrenoCol": 16200,
+  "trisTerrenoVis": 65160,
+  "trisCena": 2350801,
+  "tGera": 2123,
+  "tRay": 73.8,
+  "tSweep": 116.4,
+  "mem": 527.4,
+  "soma": 381039,
+  "fps": {
+   "quadros": 480,
+   "medio": 16.68,
+   "mediana": 16.7,
+   "p95": 23.3,
+   "fps": 60
+  }
+ },
+ {
+  "dec": 1,
+  "trisColisao": 142960,
+  "trisTerrenoCol": 64800,
+  "trisTerrenoVis": 65160,
+  "trisCena": 2350801,
+  "tGera": 2273,
+  "tRay": 81.1,
+  "tSweep": 118.8,
+  "mem": 527.4,
+  "soma": 380977,
+  "fps": {
+   "quadros": 481,
+   "medio": 16.67,
+   "mediana": 16.7,
+   "p95": 18.1,
+   "fps": 60
+  }
+ }
+]

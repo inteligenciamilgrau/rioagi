@@ -181,7 +181,12 @@ export class Drone {
     this.corpo.name = 'drone';
     this.corpo.castShadow = true;
     this.corpo.receiveShadow = true;
-    this.corpo.frustumCulled = false;
+    /* Culling ligado: o corpo do drone e uma `Mesh` RIGIDA, entao a esfera da
+     * geometria e exata e nao ha nada de skinning para escapar dela. Estava
+     * desligado por simetria com o `Soldier`, que tinha razao para isso (ver o
+     * comentario la). O lote de helices (`RotoresEnxame`) CONTINUA sem culling,
+     * de proposito: o enxame se espalha e o culling por lote erra. */
+    this.corpo.frustumCulled = true;
     this.corpo.visible = false;
     /* O pulso do telegrafo entra por uniform, escrito imediatamente antes do
      * draw DESTE drone. `onBeforeRender` e o unico gancho por objeto que o
@@ -233,6 +238,10 @@ export class Drone {
     this._alvoVoo = new THREE.Vector3();
     this._repulsa = new THREE.Vector3();
     this._iSonda = 0;
+    /* Prazo da sonda de chao (s) e sinal de "ha geometria colada" que autoriza a
+     * depenetracao. Ver os comentarios em `_mover`. */
+    this._tChao = 0;
+    this._pertoDeParede = 0;
     this._chaoY = 0;
     this._temChao = false;
     this._giroHelice = Math.random() * 6.283;
@@ -302,6 +311,8 @@ export class Drone {
     this.temDestino = false;
     this._repulsa.set(0, 0, 0);
     this._tTravado = 0;
+    this._tChao = 0;
+    this._pertoDeParede = 0.35;   // primeiro quadro: confere o corpo por garantia
     this._ultimoPonto.copy(this.pos);
     this._naRajada = 0;
     this._tReacao = 0;
@@ -718,10 +729,33 @@ export class Drone {
 
   _mover(dt) {
     const col = this.ctx.world?.collision;
+    const ai = this.ctx.ai;
+    /* Peso do LOD, escrito por `AIManager._marcarImportancia`: 3 colado ·
+     * 2 perto/na tela/atirando · 1 longe mas na tela · 0 longe e fora da tela.
+     * Quem nao tem peso (ferramenta chamando `_mover` solto) e tratado como 3. */
+    const peso = this._peso ?? 3;
+    const minhaVez = this._minhaVez !== false;
 
-    /* --- 1. chao local (1 raio por quadro, sempre) --------------------- */
-    this._chaoY = this._sondarChao(this.pos.x, this.pos.y + 0.8, this.pos.z);
-    this._temChao = true;
+    /* --- 1. chao local ------------------------------------------------
+     * ERA: 1 raio por quadro, sempre, por drone. Com 10 drones sao 10 raios
+     * por quadro so nisto.
+     *
+     * AGORA a sonda tem PRAZO DE VALIDADE em vez de ritmo fixo: 60 Hz para quem
+     * esta perto ou atirando, ~20 Hz para o resto. Um drone a 6,5 m/s anda 33 cm
+     * entre duas sondas de 20 Hz, e o controle de altitude (ganho 2,6, limite de
+     * 4,5 m/s) absorve isso sem oscilar. Se a ficha for negada, ele mantem o
+     * ultimo `_chaoY` — que e exatamente o que `_sondarChao` ja fazia quando o
+     * raio nao acertava nada. */
+    this._tChao -= dt;
+    if (this._tChao <= 0 || !this._temChao) {
+      if (ai?.pedirRaio ? ai.pedirRaio(peso >= 2 ? 1 : 0) : true) {
+        this._chaoY = this._sondarChao(this.pos.x, this.pos.y + 0.8, this.pos.z);
+        this._temChao = true;
+        this._tChao = peso >= 2 ? 0 : 0.05;
+      } else {
+        this._tChao = 0.05;
+      }
+    }
     const alt = this.pos.y - this._chaoY;
 
     /* --- 2. velocidade desejada --------------------------------------- */
@@ -773,7 +807,17 @@ export class Drone {
      * percepcao dos hostis de chao ja disputa ficha. Como a repulsao DECAI em
      * vez de zerar, uma leitura por quadro a 60 Hz da 15 Hz por direcao — mais
      * que suficiente para um bicho de 6,5 m/s. */
-    if (col?.raycast) {
+    /* A sonda rotativa e CONFORTO, nao seguranca: ela desvia com antecedencia,
+     * e a repulsao que ela gera DECAI sozinha. Quem garante que o corpo nao
+     * termina dentro da parede sao a varredura do passo e a depenetracao, logo
+     * abaixo — e essas duas nao passam por orcamento. Entao aqui a ficha pode
+     * ser negada sem consequencia de correcao: perde-se antecedencia, nao
+     * integridade. So o drone longe E fora da tela sonda a meio ritmo: baixar
+     * o ritmo de quem esta na tela levou as amostras "raspando" de 2-4 para 30
+     * em 900 (`tools/drone.mjs`, secao A). */
+    const podeSondar = (peso >= 1 || minhaVez)
+      && (ai?.pedirRaio ? ai.pedirRaio(peso >= 1 ? 1 : 0) : true);
+    if (col?.raycast && podeSondar) {
       const sonda = this._iSonda = (this._iSonda + 1) & 3;
       _dir.copy(this.vel);
       if (_dir.lengthSq() < 0.25) _dir.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
@@ -789,6 +833,8 @@ export class Drone {
         // quanto mais perto, mais forte; a normal empurra para fora da parede
         const forca = (1 - r.distance / (alcance + RAIO_CORPO)) * 14.0;
         this._repulsa.addScaledVector(r.normal, forca);
+        // ha muro ao alcance: a depenetracao passa a valer a pena (ver p.7)
+        if (r.distance < RAIO_CORPO + 1.2) this._pertoDeParede = 0.35;
         /* Parede na frente => sobe. Drone que so desvia na horizontal fica
          * costurando becos sem saida; subir resolve quase toda geometria de
          * favela, e o teto de altitude impede que "subir" vire "sumir". */
@@ -836,7 +882,12 @@ export class Drone {
      * grudar nela, que e o que evita o segundo defeito (drone imantado em muro,
      * tremendo no lugar). Custa 1 raio por quadro, e so quando ele se move. */
     const passo = this.vel.length() * dt;
-    if (col?.raycast && passo > 1e-4) {
+    /* SEGURANCA (prio 2): esta e a varredura que impede atravessar parede fina.
+     * Ela nao pode ser negada por orcamento — e ela que levou as amostras
+     * "raspando" de 55 para 44 e as "penetrando" de 20 para 15 (NOTES [AI]
+     * secao 3). O que a torna barata e o guarda que ja existia: so roda quando
+     * o drone se MOVE, e `passo` e o deslocamento do quadro. */
+    if (col?.raycast && passo > 1e-4 && (ai?.pedirRaio ? ai.pedirRaio(2) : true)) {
       _v2.copy(this.vel).divideScalar(this.vel.length());
       const r = col.raycast(this.pos, _v2, passo + RAIO_CORPO);
       if (r?.hit) {
@@ -846,6 +897,7 @@ export class Drone {
         const dot = this.vel.dot(r.normal);
         if (dot < 0) this.vel.addScaledVector(r.normal, -dot * 1.05);
         this._repulsa.addScaledVector(r.normal, 8);
+        this._pertoDeParede = 0.35;    // ha geometria colada: ver depenetracao
       } else this.pos.addScaledVector(this.vel, dt);
     } else this.pos.addScaledVector(this.vel, dt);
 
@@ -864,7 +916,35 @@ export class Drone {
      * `sphereCast` com `maxDist = 0` e exatamente a pergunta "meu corpo esta
      * tocando alguma coisa, e onde" usando so a API publica da colisao. A saida
      * e por POSICAO, nao por forca: forca chega tarde por definicao. */
-    if (col?.sphereCast) {
+    /* GUARDA NOVA, sem perda de garantia.
+     *
+     * A depenetracao era 1 `sphereCast` por drone por quadro, SEMPRE — inclusive
+     * para o drone cruzando o ceu aberto, onde ela nunca acha nada. E o
+     * `sphereCast` custa 783 B de lixo por chamada e uma consulta de ponto mais
+     * proximo no BVH (`tools/lixoai.mjs`).
+     *
+     * O caso que ela existe para cobrir e especifico e esta descrito abaixo: o
+     * drone QUASE PARADO encostado num muro. Esse caso SEMPRE vem precedido de
+     * um sinal — a sonda rotativa ou a varredura do passo acabaram de reportar
+     * geometria perto. `_pertoDeParede` e esse sinal, com validade de 0,35 s
+     * (mais de 20 quadros de folga sobre o tempo que o drone leva para encostar
+     * a 6,5 m/s). Fora dele, nao ha o que depenetrar.
+     *
+     * Prioridade 2: quando o sinal esta ligado, a ficha NUNCA e negada. */
+    this._pertoDeParede -= dt;
+    /* O corte por `_pertoDeParede` vale SO para o drone que esta longe E fora
+     * da tela (`peso 0`). Ali um clipe de corpo em muro nao existe para o
+     * jogador — nao ha quem veja.
+     *
+     * Para todo o resto a depenetracao continua rodando TODO QUADRO, como
+     * antes. Isso e deliberado depois de uma medicao: gatear ela por sinal para
+     * todo mundo levou as amostras "raspando" de 2-4 para 30 em 900
+     * (`tools/drone.mjs`, secao A). O sinal (`_pertoDeParede`) e escrito pela
+     * sonda rotativa, que ve uma direcao de cada vez — ele chega tarde demais
+     * para servir de guarda de quem esta na tela. */
+    const precisaDepenetrar = peso > 0 || this._pertoDeParede > 0;
+    if (col?.sphereCast && precisaDepenetrar
+      && (ai?.pedirRaio ? ai.pedirRaio(2) : true)) {
       const s = col.sphereCast(this.pos, _cima, RAIO_CORPO, 0);
       if (s.hit) {
         _v2.subVectors(this.pos, s.point);

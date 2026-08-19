@@ -1,0 +1,3019 @@
+{
+ "base": {
+  "y": 32.862,
+  "sup": "terra"
+ },
+ "travado": {
+  "x": -25.606,
+  "y": 32.306,
+  "z": -56.969
+ },
+ "aqui": {
+  "y": 36.34502029418945,
+  "sup": "concreto",
+  "ny": 1
+ },
+ "caminho": [
+  {
+   "k": 0,
+   "s": -1.528,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.872,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.282,
+    33.352
+   ],
+   "pos": {
+    "x": -25.963,
+    "z": -65.537
+   }
+  },
+  {
+   "k": 1,
+   "s": -1.456,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.866,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.272,
+    33.342
+   ],
+   "pos": {
+    "x": -25.96,
+    "z": -65.465
+   }
+  },
+  {
+   "k": 2,
+   "s": -1.384,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.86,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.266,
+    33.336
+   ],
+   "pos": {
+    "x": -25.957,
+    "z": -65.393
+   }
+  },
+  {
+   "k": 3,
+   "s": -1.312,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.855,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.26,
+    33.33
+   ],
+   "pos": {
+    "x": -25.954,
+    "z": -65.321
+   }
+  },
+  {
+   "k": 4,
+   "s": -1.24,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.85,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.255,
+    33.325
+   ],
+   "pos": {
+    "x": -25.951,
+    "z": -65.249
+   }
+  },
+  {
+   "k": 5,
+   "s": -1.168,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.845,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.25,
+    33.32
+   ],
+   "pos": {
+    "x": -25.948,
+    "z": -65.177
+   }
+  },
+  {
+   "k": 6,
+   "s": -1.096,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.84,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.245,
+    33.315
+   ],
+   "pos": {
+    "x": -25.945,
+    "z": -65.105
+   }
+  },
+  {
+   "k": 7,
+   "s": -1.023,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.835,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.24,
+    33.31
+   ],
+   "pos": {
+    "x": -25.942,
+    "z": -65.033
+   }
+  },
+  {
+   "k": 8,
+   "s": -0.951,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.83,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.235,
+    33.305
+   ],
+   "pos": {
+    "x": -25.939,
+    "z": -64.961
+   }
+  },
+  {
+   "k": 9,
+   "s": -0.879,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.825,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.23,
+    33.3
+   ],
+   "pos": {
+    "x": -25.936,
+    "z": -64.889
+   }
+  },
+  {
+   "k": 10,
+   "s": -0.807,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.82,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.225,
+    33.295
+   ],
+   "pos": {
+    "x": -25.933,
+    "z": -64.817
+   }
+  },
+  {
+   "k": 11,
+   "s": -0.735,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.815,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.22,
+    33.29
+   ],
+   "pos": {
+    "x": -25.93,
+    "z": -64.745
+   }
+  },
+  {
+   "k": 12,
+   "s": -0.663,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.81,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.215,
+    33.285
+   ],
+   "pos": {
+    "x": -25.927,
+    "z": -64.673
+   }
+  },
+  {
+   "k": 13,
+   "s": -0.591,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.805,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.21,
+    33.28
+   ],
+   "pos": {
+    "x": -25.924,
+    "z": -64.601
+   }
+  },
+  {
+   "k": 14,
+   "s": -0.519,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.8,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.205,
+    33.275
+   ],
+   "pos": {
+    "x": -25.921,
+    "z": -64.529
+   }
+  },
+  {
+   "k": 15,
+   "s": -0.447,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.795,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.2,
+    33.27
+   ],
+   "pos": {
+    "x": -25.918,
+    "z": -64.457
+   }
+  },
+  {
+   "k": 16,
+   "s": -0.375,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.79,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.195,
+    33.265
+   ],
+   "pos": {
+    "x": -25.915,
+    "z": -64.385
+   }
+  },
+  {
+   "k": 17,
+   "s": -0.303,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.785,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.19,
+    33.26
+   ],
+   "pos": {
+    "x": -25.912,
+    "z": -64.313
+   }
+  },
+  {
+   "k": 18,
+   "s": -0.231,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.78,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.185,
+    33.255
+   ],
+   "pos": {
+    "x": -25.909,
+    "z": -64.241
+   }
+  },
+  {
+   "k": 19,
+   "s": -0.159,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.775,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.18,
+    33.25
+   ],
+   "pos": {
+    "x": -25.906,
+    "z": -64.169
+   }
+  },
+  {
+   "k": 20,
+   "s": -0.087,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.771,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.175,
+    33.245
+   ],
+   "pos": {
+    "x": -25.903,
+    "z": -64.097
+   }
+  },
+  {
+   "k": 21,
+   "s": -0.015,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.767,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.171,
+    33.241
+   ],
+   "pos": {
+    "x": -25.9,
+    "z": -64.025
+   }
+  },
+  {
+   "k": 22,
+   "s": 0.057,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.757,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.167,
+    33.237
+   ],
+   "pos": {
+    "x": -25.897,
+    "z": -63.953
+   }
+  },
+  {
+   "k": 23,
+   "s": 0.129,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.744,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.157,
+    33.227
+   ],
+   "pos": {
+    "x": -25.894,
+    "z": -63.881
+   }
+  },
+  {
+   "k": 24,
+   "s": 0.202,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.737,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.144,
+    33.214
+   ],
+   "pos": {
+    "x": -25.891,
+    "z": -63.809
+   }
+  },
+  {
+   "k": 25,
+   "s": 0.274,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.735,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.137,
+    33.207
+   ],
+   "pos": {
+    "x": -25.888,
+    "z": -63.737
+   }
+  },
+  {
+   "k": 26,
+   "s": 0.346,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.736,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.135,
+    33.205
+   ],
+   "pos": {
+    "x": -25.885,
+    "z": -63.665
+   }
+  },
+  {
+   "k": 27,
+   "s": 0.418,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.723,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.136,
+    33.206
+   ],
+   "pos": {
+    "x": -25.882,
+    "z": -63.593
+   }
+  },
+  {
+   "k": 28,
+   "s": 0.49,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.71,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.123,
+    33.193
+   ],
+   "pos": {
+    "x": -25.879,
+    "z": -63.521
+   }
+  },
+  {
+   "k": 29,
+   "s": 0.562,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.697,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.11,
+    33.18
+   ],
+   "pos": {
+    "x": -25.876,
+    "z": -63.449
+   }
+  },
+  {
+   "k": 30,
+   "s": 0.634,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.786,
+   "stepped": true,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 0,
+   "passos": 1,
+   "nDep": 10,
+   "sonda70": null,
+   "faixa": [
+    32.097,
+    33.167
+   ],
+   "pos": {
+    "x": -25.873,
+    "z": -63.377
+   }
+  },
+  {
+   "k": 31,
+   "s": 0.706,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.883,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.186,
+    33.256
+   ],
+   "pos": {
+    "x": -25.87,
+    "z": -63.305
+   }
+  },
+  {
+   "k": 32,
+   "s": 0.778,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.853,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.283,
+    33.353
+   ],
+   "pos": {
+    "x": -25.867,
+    "z": -63.233
+   }
+  },
+  {
+   "k": 33,
+   "s": 0.85,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.824,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.253,
+    33.323
+   ],
+   "pos": {
+    "x": -25.864,
+    "z": -63.161
+   }
+  },
+  {
+   "k": 34,
+   "s": 0.922,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.899,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.224,
+    33.294
+   ],
+   "pos": {
+    "x": -25.861,
+    "z": -63.089
+   }
+  },
+  {
+   "k": 35,
+   "s": 0.994,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.869,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.299,
+    33.369
+   ],
+   "pos": {
+    "x": -25.858,
+    "z": -63.017
+   }
+  },
+  {
+   "k": 36,
+   "s": 1.066,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.84,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.269,
+    33.339
+   ],
+   "pos": {
+    "x": -25.855,
+    "z": -62.945
+   }
+  },
+  {
+   "k": 37,
+   "s": 1.138,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.882,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.24,
+    33.31
+   ],
+   "pos": {
+    "x": -25.852,
+    "z": -62.873
+   }
+  },
+  {
+   "k": 38,
+   "s": 1.21,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.853,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.282,
+    33.352
+   ],
+   "pos": {
+    "x": -25.849,
+    "z": -62.801
+   }
+  },
+  {
+   "k": 39,
+   "s": 1.282,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.824,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.253,
+    33.323
+   ],
+   "pos": {
+    "x": -25.846,
+    "z": -62.729
+   }
+  },
+  {
+   "k": 40,
+   "s": 1.355,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.794,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.224,
+    33.294
+   ],
+   "pos": {
+    "x": -25.843,
+    "z": -62.657
+   }
+  },
+  {
+   "k": 41,
+   "s": 1.427,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.765,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.194,
+    33.264
+   ],
+   "pos": {
+    "x": -25.84,
+    "z": -62.585
+   }
+  },
+  {
+   "k": 42,
+   "s": 1.499,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.735,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.165,
+    33.235
+   ],
+   "pos": {
+    "x": -25.837,
+    "z": -62.513
+   }
+  },
+  {
+   "k": 43,
+   "s": 1.571,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.706,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.135,
+    33.205
+   ],
+   "pos": {
+    "x": -25.834,
+    "z": -62.441
+   }
+  },
+  {
+   "k": 44,
+   "s": 1.643,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.676,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.106,
+    33.176
+   ],
+   "pos": {
+    "x": -25.831,
+    "z": -62.369
+   }
+  },
+  {
+   "k": 45,
+   "s": 1.715,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.653,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.076,
+    33.146
+   ],
+   "pos": {
+    "x": -25.828,
+    "z": -62.297
+   }
+  },
+  {
+   "k": 46,
+   "s": 1.787,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.639,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.053,
+    33.123
+   ],
+   "pos": {
+    "x": -25.825,
+    "z": -62.225
+   }
+  },
+  {
+   "k": 47,
+   "s": 1.859,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.625,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.039,
+    33.109
+   ],
+   "pos": {
+    "x": -25.822,
+    "z": -62.153
+   }
+  },
+  {
+   "k": 48,
+   "s": 1.931,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.611,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.025,
+    33.095
+   ],
+   "pos": {
+    "x": -25.819,
+    "z": -62.081
+   }
+  },
+  {
+   "k": 49,
+   "s": 2.003,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.597,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    32.011,
+    33.081
+   ],
+   "pos": {
+    "x": -25.816,
+    "z": -62.009
+   }
+  },
+  {
+   "k": 50,
+   "s": 2.075,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.583,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.997,
+    33.067
+   ],
+   "pos": {
+    "x": -25.813,
+    "z": -61.937
+   }
+  },
+  {
+   "k": 51,
+   "s": 2.147,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.569,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.983,
+    33.053
+   ],
+   "pos": {
+    "x": -25.81,
+    "z": -61.865
+   }
+  },
+  {
+   "k": 52,
+   "s": 2.219,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.554,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.969,
+    33.039
+   ],
+   "pos": {
+    "x": -25.807,
+    "z": -61.793
+   }
+  },
+  {
+   "k": 53,
+   "s": 2.291,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.54,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.954,
+    33.024
+   ],
+   "pos": {
+    "x": -25.804,
+    "z": -61.721
+   }
+  },
+  {
+   "k": 54,
+   "s": 2.363,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.526,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.94,
+    33.01
+   ],
+   "pos": {
+    "x": -25.801,
+    "z": -61.649
+   }
+  },
+  {
+   "k": 55,
+   "s": 2.435,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.512,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.926,
+    32.996
+   ],
+   "pos": {
+    "x": -25.798,
+    "z": -61.577
+   }
+  },
+  {
+   "k": 56,
+   "s": 2.507,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.498,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.912,
+    32.982
+   ],
+   "pos": {
+    "x": -25.795,
+    "z": -61.505
+   }
+  },
+  {
+   "k": 57,
+   "s": 2.58,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.484,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.898,
+    32.968
+   ],
+   "pos": {
+    "x": -25.792,
+    "z": -61.433
+   }
+  },
+  {
+   "k": 58,
+   "s": 2.652,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.47,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.884,
+    32.954
+   ],
+   "pos": {
+    "x": -25.789,
+    "z": -61.361
+   }
+  },
+  {
+   "k": 59,
+   "s": 2.724,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.368,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.87,
+    32.94
+   ],
+   "pos": {
+    "x": -25.786,
+    "z": -61.289
+   }
+  },
+  {
+   "k": 60,
+   "s": 2.796,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.363,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.768,
+    32.838
+   ],
+   "pos": {
+    "x": -25.783,
+    "z": -61.217
+   }
+  },
+  {
+   "k": 61,
+   "s": 2.868,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.359,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.763,
+    32.833
+   ],
+   "pos": {
+    "x": -25.78,
+    "z": -61.145
+   }
+  },
+  {
+   "k": 62,
+   "s": 2.94,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.354,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.759,
+    32.829
+   ],
+   "pos": {
+    "x": -25.777,
+    "z": -61.073
+   }
+  },
+  {
+   "k": 63,
+   "s": 3.012,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.349,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.754,
+    32.824
+   ],
+   "pos": {
+    "x": -25.774,
+    "z": -61.001
+   }
+  },
+  {
+   "k": 64,
+   "s": 3.084,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.344,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.749,
+    32.819
+   ],
+   "pos": {
+    "x": -25.771,
+    "z": -60.929
+   }
+  },
+  {
+   "k": 65,
+   "s": 3.156,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.34,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.744,
+    32.814
+   ],
+   "pos": {
+    "x": -25.768,
+    "z": -60.857
+   }
+  },
+  {
+   "k": 66,
+   "s": 3.228,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.335,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.74,
+    32.81
+   ],
+   "pos": {
+    "x": -25.765,
+    "z": -60.785
+   }
+  },
+  {
+   "k": 67,
+   "s": 3.3,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.332,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.735,
+    32.805
+   ],
+   "pos": {
+    "x": -25.762,
+    "z": -60.713
+   }
+  },
+  {
+   "k": 68,
+   "s": 3.372,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.332,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.732,
+    32.802
+   ],
+   "pos": {
+    "x": -25.759,
+    "z": -60.641
+   }
+  },
+  {
+   "k": 69,
+   "s": 3.444,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.332,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.732,
+    32.802
+   ],
+   "pos": {
+    "x": -25.756,
+    "z": -60.569
+   }
+  },
+  {
+   "k": 70,
+   "s": 3.516,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.332,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.732,
+    32.802
+   ],
+   "pos": {
+    "x": -25.753,
+    "z": -60.497
+   }
+  },
+  {
+   "k": 71,
+   "s": 3.588,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.331,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.732,
+    32.802
+   ],
+   "pos": {
+    "x": -25.75,
+    "z": -60.425
+   }
+  },
+  {
+   "k": 72,
+   "s": 3.66,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.331,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.731,
+    32.801
+   ],
+   "pos": {
+    "x": -25.747,
+    "z": -60.353
+   }
+  },
+  {
+   "k": 73,
+   "s": 3.733,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.331,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.731,
+    32.801
+   ],
+   "pos": {
+    "x": -25.744,
+    "z": -60.281
+   }
+  },
+  {
+   "k": 74,
+   "s": 3.805,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.331,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.731,
+    32.801
+   ],
+   "pos": {
+    "x": -25.741,
+    "z": -60.209
+   }
+  },
+  {
+   "k": 75,
+   "s": 3.877,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.331,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.731,
+    32.801
+   ],
+   "pos": {
+    "x": -25.738,
+    "z": -60.137
+   }
+  },
+  {
+   "k": 76,
+   "s": 3.949,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.331,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.731,
+    32.801
+   ],
+   "pos": {
+    "x": -25.735,
+    "z": -60.065
+   }
+  },
+  {
+   "k": 77,
+   "s": 4.021,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.331,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.731,
+    32.801
+   ],
+   "pos": {
+    "x": -25.732,
+    "z": -59.993
+   }
+  },
+  {
+   "k": 78,
+   "s": 4.093,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.33,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.731,
+    32.801
+   ],
+   "pos": {
+    "x": -25.729,
+    "z": -59.921
+   }
+  },
+  {
+   "k": 79,
+   "s": 4.165,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.33,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.73,
+    32.8
+   ],
+   "pos": {
+    "x": -25.726,
+    "z": -59.849
+   }
+  },
+  {
+   "k": 80,
+   "s": 4.237,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.329,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.73,
+    32.8
+   ],
+   "pos": {
+    "x": -25.723,
+    "z": -59.777
+   }
+  },
+  {
+   "k": 81,
+   "s": 4.309,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.329,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.729,
+    32.799
+   ],
+   "pos": {
+    "x": -25.72,
+    "z": -59.705
+   }
+  },
+  {
+   "k": 82,
+   "s": 4.381,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.328,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.729,
+    32.799
+   ],
+   "pos": {
+    "x": -25.717,
+    "z": -59.633
+   }
+  },
+  {
+   "k": 83,
+   "s": 4.453,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.327,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.728,
+    32.798
+   ],
+   "pos": {
+    "x": -25.714,
+    "z": -59.561
+   }
+  },
+  {
+   "k": 84,
+   "s": 4.525,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.327,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.727,
+    32.797
+   ],
+   "pos": {
+    "x": -25.711,
+    "z": -59.489
+   }
+  },
+  {
+   "k": 85,
+   "s": 4.597,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.326,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.727,
+    32.797
+   ],
+   "pos": {
+    "x": -25.708,
+    "z": -59.417
+   }
+  },
+  {
+   "k": 86,
+   "s": 4.669,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.326,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.726,
+    32.796
+   ],
+   "pos": {
+    "x": -25.705,
+    "z": -59.345
+   }
+  },
+  {
+   "k": 87,
+   "s": 4.741,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.325,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.726,
+    32.796
+   ],
+   "pos": {
+    "x": -25.702,
+    "z": -59.273
+   }
+  },
+  {
+   "k": 88,
+   "s": 4.813,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.325,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.725,
+    32.795
+   ],
+   "pos": {
+    "x": -25.699,
+    "z": -59.201
+   }
+  },
+  {
+   "k": 89,
+   "s": 4.885,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.324,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.725,
+    32.795
+   ],
+   "pos": {
+    "x": -25.696,
+    "z": -59.129
+   }
+  },
+  {
+   "k": 90,
+   "s": 4.958,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.323,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.724,
+    32.794
+   ],
+   "pos": {
+    "x": -25.693,
+    "z": -59.057
+   }
+  },
+  {
+   "k": 91,
+   "s": 5.03,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.323,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.723,
+    32.793
+   ],
+   "pos": {
+    "x": -25.69,
+    "z": -58.985
+   }
+  },
+  {
+   "k": 92,
+   "s": 5.102,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.322,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.723,
+    32.793
+   ],
+   "pos": {
+    "x": -25.687,
+    "z": -58.913
+   }
+  },
+  {
+   "k": 93,
+   "s": 5.174,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.322,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.722,
+    32.792
+   ],
+   "pos": {
+    "x": -25.684,
+    "z": -58.841
+   }
+  },
+  {
+   "k": 94,
+   "s": 5.246,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.321,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.722,
+    32.792
+   ],
+   "pos": {
+    "x": -25.681,
+    "z": -58.769
+   }
+  },
+  {
+   "k": 95,
+   "s": 5.318,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.32,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.721,
+    32.791
+   ],
+   "pos": {
+    "x": -25.678,
+    "z": -58.697
+   }
+  },
+  {
+   "k": 96,
+   "s": 5.39,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.32,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.72,
+    32.79
+   ],
+   "pos": {
+    "x": -25.675,
+    "z": -58.625
+   }
+  },
+  {
+   "k": 97,
+   "s": 5.462,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.319,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.72,
+    32.79
+   ],
+   "pos": {
+    "x": -25.672,
+    "z": -58.553
+   }
+  },
+  {
+   "k": 98,
+   "s": 5.534,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.319,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.719,
+    32.789
+   ],
+   "pos": {
+    "x": -25.669,
+    "z": -58.481
+   }
+  },
+  {
+   "k": 99,
+   "s": 5.606,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.318,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.719,
+    32.789
+   ],
+   "pos": {
+    "x": -25.666,
+    "z": -58.409
+   }
+  },
+  {
+   "k": 100,
+   "s": 5.678,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.318,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.718,
+    32.788
+   ],
+   "pos": {
+    "x": -25.663,
+    "z": -58.337
+   }
+  },
+  {
+   "k": 101,
+   "s": 5.75,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.317,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.718,
+    32.788
+   ],
+   "pos": {
+    "x": -25.66,
+    "z": -58.265
+   }
+  },
+  {
+   "k": 102,
+   "s": 5.822,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.316,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.717,
+    32.787
+   ],
+   "pos": {
+    "x": -25.657,
+    "z": -58.193
+   }
+  },
+  {
+   "k": 103,
+   "s": 5.894,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.316,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.716,
+    32.786
+   ],
+   "pos": {
+    "x": -25.654,
+    "z": -58.121
+   }
+  },
+  {
+   "k": 104,
+   "s": 5.966,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.315,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.716,
+    32.786
+   ],
+   "pos": {
+    "x": -25.651,
+    "z": -58.049
+   }
+  },
+  {
+   "k": 105,
+   "s": 6.038,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.315,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.715,
+    32.785
+   ],
+   "pos": {
+    "x": -25.648,
+    "z": -57.977
+   }
+  },
+  {
+   "k": 106,
+   "s": 6.111,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.314,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.715,
+    32.785
+   ],
+   "pos": {
+    "x": -25.645,
+    "z": -57.905
+   }
+  },
+  {
+   "k": 107,
+   "s": 6.183,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.313,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.714,
+    32.784
+   ],
+   "pos": {
+    "x": -25.642,
+    "z": -57.833
+   }
+  },
+  {
+   "k": 108,
+   "s": 6.255,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.313,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.713,
+    32.783
+   ],
+   "pos": {
+    "x": -25.639,
+    "z": -57.761
+   }
+  },
+  {
+   "k": 109,
+   "s": 6.327,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.312,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.713,
+    32.783
+   ],
+   "pos": {
+    "x": -25.636,
+    "z": -57.689
+   }
+  },
+  {
+   "k": 110,
+   "s": 6.399,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.312,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.712,
+    32.782
+   ],
+   "pos": {
+    "x": -25.633,
+    "z": -57.617
+   }
+  },
+  {
+   "k": 111,
+   "s": 6.471,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.311,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.712,
+    32.782
+   ],
+   "pos": {
+    "x": -25.63,
+    "z": -57.545
+   }
+  },
+  {
+   "k": 112,
+   "s": 6.543,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.311,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.711,
+    32.781
+   ],
+   "pos": {
+    "x": -25.627,
+    "z": -57.473
+   }
+  },
+  {
+   "k": 113,
+   "s": 6.615,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.31,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.711,
+    32.781
+   ],
+   "pos": {
+    "x": -25.624,
+    "z": -57.401
+   }
+  },
+  {
+   "k": 114,
+   "s": 6.687,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.309,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.71,
+    32.78
+   ],
+   "pos": {
+    "x": -25.621,
+    "z": -57.329
+   }
+  },
+  {
+   "k": 115,
+   "s": 6.759,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.309,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.709,
+    32.779
+   ],
+   "pos": {
+    "x": -25.618,
+    "z": -57.257
+   }
+  },
+  {
+   "k": 116,
+   "s": 6.831,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.308,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.709,
+    32.779
+   ],
+   "pos": {
+    "x": -25.615,
+    "z": -57.185
+   }
+  },
+  {
+   "k": 117,
+   "s": 6.903,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.308,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.708,
+    32.778
+   ],
+   "pos": {
+    "x": -25.612,
+    "z": -57.113
+   }
+  },
+  {
+   "k": 118,
+   "s": 6.975,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.307,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.708,
+    32.778
+   ],
+   "pos": {
+    "x": -25.609,
+    "z": -57.041
+   }
+  },
+  {
+   "k": 119,
+   "s": 7.047,
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.306,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.707,
+    32.777
+   ],
+   "pos": {
+    "x": -25.606,
+    "z": -56.969
+   }
+  }
+ ],
+ "escada": [
+  {
+   "passo": 0.005,
+   "av": 0.005,
+   "y": 32.306,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.706,
+    32.776
+   ],
+   "pos": {
+    "x": -25.606,
+    "z": -56.964
+   }
+  },
+  {
+   "passo": 0.0131,
+   "av": 0.0131,
+   "y": 32.306,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.706,
+    32.776
+   ],
+   "pos": {
+    "x": -25.606,
+    "z": -56.956
+   }
+  },
+  {
+   "passo": 0.019,
+   "av": 0.019,
+   "y": 32.306,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.706,
+    32.776
+   ],
+   "pos": {
+    "x": -25.605,
+    "z": -56.95
+   }
+  },
+  {
+   "passo": 0.021,
+   "av": 0.021,
+   "y": 32.306,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.706,
+    32.776
+   ],
+   "pos": {
+    "x": -25.605,
+    "z": -56.948
+   }
+  },
+  {
+   "passo": 0.03,
+   "av": 0.03,
+   "y": 32.306,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.706,
+    32.776
+   ],
+   "pos": {
+    "x": -25.605,
+    "z": -56.939
+   }
+  },
+  {
+   "passo": 0.05,
+   "av": 0.05,
+   "y": 32.306,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.706,
+    32.776
+   ],
+   "pos": {
+    "x": -25.604,
+    "z": -56.919
+   }
+  },
+  {
+   "passo": 0.0717,
+   "av": 0.0717,
+   "y": 32.306,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.706,
+    32.776
+   ],
+   "pos": {
+    "x": -25.603,
+    "z": -56.897
+   }
+  },
+  {
+   "passo": 0.1,
+   "av": 0.1,
+   "y": 32.306,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.706,
+    32.776
+   ],
+   "pos": {
+    "x": -25.603,
+    "z": -56.869
+   }
+  },
+  {
+   "passo": 0.15,
+   "av": 0.15,
+   "y": 32.305,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 1,
+   "nDep": 1,
+   "sonda70": null,
+   "faixa": [
+    31.706,
+    32.776
+   ],
+   "pos": {
+    "x": -25.601,
+    "z": -56.819
+   }
+  },
+  {
+   "passo": 0.2,
+   "av": 0.2,
+   "y": 32.305,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 2,
+   "nDep": 2,
+   "sonda70": null,
+   "faixa": [
+    31.706,
+    32.776
+   ],
+   "pos": {
+    "x": -25.599,
+    "z": -56.769
+   }
+  },
+  {
+   "passo": 0.3,
+   "av": 0.3,
+   "y": 32.304,
+   "stepped": false,
+   "hitWall": false,
+   "grounded": true,
+   "portao": 2,
+   "passos": 2,
+   "nDep": 2,
+   "sonda70": null,
+   "faixa": [
+    31.706,
+    32.776
+   ],
+   "pos": {
+    "x": -25.596,
+    "z": -56.669
+   }
+  }
+ ],
+ "perfil": [
+  {
+   "d": 0.05,
+   "y": 36.345,
+   "sobe": 0,
+   "sup": "concreto",
+   "ny": 1
+  },
+  {
+   "d": 0.1,
+   "y": 36.345,
+   "sobe": 0,
+   "sup": "concreto",
+   "ny": 1
+  },
+  {
+   "d": 0.15,
+   "y": 36.345,
+   "sobe": 0,
+   "sup": "concreto",
+   "ny": 1
+  },
+  {
+   "d": 0.2,
+   "y": 36.345,
+   "sobe": 0,
+   "sup": "concreto",
+   "ny": 1
+  },
+  {
+   "d": 0.25,
+   "y": 36.345,
+   "sobe": 0,
+   "sup": "concreto",
+   "ny": 1
+  },
+  {
+   "d": 0.3,
+   "y": 36.345,
+   "sobe": 0,
+   "sup": "concreto",
+   "ny": 1
+  },
+  {
+   "d": 0.35,
+   "y": 36.345,
+   "sobe": 0,
+   "sup": "concreto",
+   "ny": 1
+  },
+  {
+   "d": 0.4,
+   "y": 36.345,
+   "sobe": 0,
+   "sup": "concreto",
+   "ny": 1
+  },
+  {
+   "d": 0.5,
+   "y": 36.345,
+   "sobe": 0,
+   "sup": "concreto",
+   "ny": 1
+  },
+  {
+   "d": 0.6,
+   "y": 36.345,
+   "sobe": 0,
+   "sup": "concreto",
+   "ny": 1
+  },
+  {
+   "d": 0.8,
+   "y": 38.205,
+   "sobe": 1.86,
+   "sup": "concreto",
+   "ny": 1
+  }
+ ],
+ "pulo": [
+  {
+   "k": 0,
+   "y": 32.383,
+   "ganho": 0.077,
+   "grounded": false,
+   "stepped": false
+  },
+  {
+   "k": 1,
+   "y": 32.458,
+   "ganho": 0.075,
+   "grounded": false,
+   "stepped": false
+  },
+  {
+   "k": 2,
+   "y": 32.53,
+   "ganho": 0.072,
+   "grounded": false,
+   "stepped": false
+  },
+  {
+   "k": 3,
+   "y": 32.599,
+   "ganho": 0.069,
+   "grounded": false,
+   "stepped": false
+  },
+  {
+   "k": 4,
+   "y": 32.666,
+   "ganho": 0.067,
+   "grounded": false,
+   "stepped": false
+  },
+  {
+   "k": 5,
+   "y": 32.73,
+   "ganho": 0.064,
+   "grounded": false,
+   "stepped": false
+  },
+  {
+   "k": 6,
+   "y": 32.791,
+   "ganho": 0.061,
+   "grounded": false,
+   "stepped": false
+  },
+  {
+   "k": 7,
+   "y": 32.849,
+   "ganho": 0.058,
+   "grounded": false,
+   "stepped": false
+  }
+ ],
+ "dx": 0.035,
+ "dz": 0.999
+}
